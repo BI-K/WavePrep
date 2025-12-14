@@ -1,0 +1,54 @@
+{
+    "project_name": "mimic_iii",
+    "description": "MIMIC-III Waveform Database Matched Subset 1.0",
+    "url": "https://physionet.org/content/mimic3wdb-matched",
+
+    "logging": {
+        "version": 1,
+        "disable_existing_loggers": false,
+        "formatters": {
+            "detailed": {
+                "format": "%(asctime)s [%(levelname)8s] %(name)s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+            "console": {
+                "format": "%(asctime)s [%(levelname)8s] %(message)s"
+            }
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "level": "DEBUG",
+                "formatter": "console",
+                "stream": "ext://sys.stdout"
+            },
+            "file": {
+                "class": "logging.FileHandler",
+                "level": "DEBUG",
+                "formatter": "detailed",
+                "filename": "logs/log.txt",
+                "mode": "a",
+                "encoding": "utf-8"
+            }
+        },
+        "loggers": {
+            "mimic_iii": {
+                "level": "DEBUG",
+                "handlers": ["console", "file"],
+                "propagate": false
+            }
+        },
+        "root": {
+            "level": "DEBUG",
+            "handlers": ["console"]
+        }
+    },
+
+    "output": {
+        "base_dir": "outputs",
+        "run_naming": {
+            "format": "{task_name}_{timestamp}",
+            "timestamp_format": "%Y%m%d_%H%M%S"
+        }
+    }
+}

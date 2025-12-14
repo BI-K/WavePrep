@@ -1,0 +1,279 @@
+{
+    "run_type": "create", 
+    "database_name": "mimic3wdb-matched/1.0",
+    "test_mode": true,
+    "discovery_mode": "record_list",
+    "record_list_file": "inputs/vasopressors.csv",
+
+    "input_channels": [
+        "CVP", "HR", "NBPSys", "NBPDias", "NBPMean", "SpO2"
+    ],
+    "output_channels": [
+        "CVP", "HR", "NBPSys", "NBPDias", "NBPMean", "SpO2"
+    ],
+
+    "signal_processing": [
+        {"channel" : "CVP",
+        "steps":[{
+            "step": 0,
+            "downsampling":{
+                "desired_resolution": 0.0166666666667,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": -15.0,
+                "upper_threshold": 50.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
+        },
+        {
+            "step": 3,
+            "downsampling": {
+                "desired_resolution": 0.0033333333333,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation": {}
+        }
+    ]},
+    {"channel" : "HR",
+        "steps":[{
+            "step": 0,
+            "downsampling":{
+                "desired_resolution": 0.0166666666667,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 10.0,
+                "upper_threshold": 330.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
+        },
+        {
+            "step": 3,
+            "downsampling": {
+                "desired_resolution": 0.0033333333333,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation": {}
+        }]
+        },
+        {"channel" : "NBPSys",
+        "steps":[
+            {
+            "step": 0,
+            "downsampling":{
+                "desired_resolution": 0.0166666666667,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 8.0,
+                "upper_threshold": 350.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
+        },
+        {
+            "step": 3,
+            "downsampling": {
+                "desired_resolution": 0.0033333333333,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation": {}
+        }]
+        },
+        {"channel" : "NBPDias",
+        "steps":[{
+            "step": 0,
+            "downsampling":{
+                "desired_resolution": 0.0166666666667,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 8.0,
+                "upper_threshold": 150.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
+        },
+        {
+            "step": 3,
+            "downsampling": {
+                "desired_resolution": 0.0033333333333,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation": {}
+        }]
+        },
+        {"channel" : "NBPMean",
+        "steps":[{
+            "step": 0,
+            "downsampling":{
+                "desired_resolution": 0.0166666666667,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 8.0,
+                "upper_threshold": 170.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
+        },
+        {
+            "step": 3,
+            "downsampling": {
+                "desired_resolution": 0.0033333333333,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation": {}
+        }]
+        },
+        {"channel" : "SpO2",
+        "steps":[{
+            "step": 0,
+            "downsampling":{
+                "desired_resolution": 0.0166666666667,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 40.0,
+                "upper_threshold": 100.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
+        },
+        {
+            "step": 3,
+            "downsampling": {
+                "desired_resolution": 0.0033333333333,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation": {}
+        }]
+        }
+    ],
+
+    "windowing": {
+        "expected_resolution": 0.0033333333333,
+        "observation_window": 3600,
+        "prediction_horizon": 0,
+        "prediction_window": 300,
+        "step": 3900
+    },
+
+    "validation": {
+        "min_record_duration": 3900,
+        "validate_channels": true,
+        "strict_nan_check": false
+    },
+
+    "splitting_method": "group_shuffle",
+    "random_seed": 42,
+
+    "train_ratio": 0.8,
+    "validation_ratio": 0.00,
+    "test_ratio": 0.20,
+
+    "min_samples_per_subject": 1,
+    "exclude_subjects": [],
+    "include_only_subjects": [],
+    "dry_run": false,
+
+    "output": {
+        "base_dir": "outputs/vasopressors",
+        "directory_structure": [
+            "logs",
+            "reports",
+            "data",
+            "analysis",
+            "splits"
+        ],
+        "save_format": "csv",
+        "include_metadata": false
+    }
+}
