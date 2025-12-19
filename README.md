@@ -54,6 +54,9 @@ Start by specifying the basics
     # please see next section for details
     "signal_processing": [ ... ],
 
+    # overarching pre-processing split
+    "long_nan_seq_removal": [ ... ]
+
     ## Window Specific Configurations ##
     "windowing": { 
         ## The expected resolution at the point of windowing the data in Hz
@@ -167,6 +170,16 @@ For each technique you should specify some parameters:
                 "method": "hinrichs_paper"
             }
 
+```
+
+There is one special pre-processing/data cleaning step, it is modelled to affect all channels at the same time, so it is defied out of the ```signal_processing``` defintion.  You can configure the script to "cut-out" chunks of the recordings which have more than ```max_consecutive_nans``` nans in any of the channels.
+```
+"long_nan_seq_removal": [
+        {
+            "after_step": 1,
+            "max_consecutive_nans": 15
+        }
+    ]
 ```
 
 
