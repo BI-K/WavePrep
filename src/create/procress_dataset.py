@@ -32,8 +32,7 @@ from preprocessing.imputing import is_imputer_that_needs_split
 from preprocessing.imputing import train_and_save_imputer
 
 from validation.validation import validate_record, generate_detailed_analysis, analyze_nan_values, save_reports
-
-
+from validation import initialize_visualization
 
 # Worker process initialization function
 def worker_init(log_file_path=None):
@@ -110,7 +109,7 @@ def get_step_for_windowing_and_split(config: Dict[str, Any]) -> Tuple[int, int, 
 
 
 def process_records_parallel_wfdb(records_df: pd.DataFrame, config: Dict[str, Any], start_step: int, end_step: int, max_workers: int,
-                           output_manager, logger, log_file_path=None) -> List[Tuple[str, int, str, Dict[str, Any]]]:
+                           output_manager, logger, log_file_path=None, records_to_visualize = []) -> List[Tuple[str, int, str, Dict[str, Any]]]:
     """Process multiple records in parallel."""
     
     logger.info(f"Starting parallel processing with {max_workers} workers")
@@ -125,7 +124,7 @@ def process_records_parallel_wfdb(records_df: pd.DataFrame, config: Dict[str, An
 
         process_args = [
                 (row['full_path'], row["offset_start_seconds"], row["offset_end_seconds"], start_step, end_step,
-                config, output_manager, logger_name, idx)
+                config, output_manager, logger_name, idx, records_to_visualize)
                 for idx, row in records_df.iterrows()
         ]
             
@@ -260,6 +259,7 @@ def create_dataset_pt(path: str, is_train: bool):
     
     # Parallelize folder processing using ThreadPoolExecutor (I/O-bound task)
     max_workers = min(os.cpu_count() or 1, len(folders))  # Don't spawn more workers than folders
+    #max_workers = 1
     print(f"Processing {len(folders)} folders with {max_workers} workers")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(create_dataset_pt_process_folder, path, folder) for folder in folders]
@@ -315,22 +315,27 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
                f"pred={windowing_config.get('prediction_window')}s")
     
     start_time = time.time()
-    
+
     try:
         # Load record list
         records_df = load_record_list(config, logger)
+
+        # initialize visualizer
+        records_to_visualize = initialize_visualization(records_df['record'].tolist(), config)
+        
+        
         
         # Process records with log file path
         max_workers = os.cpu_count() or 1  # Use all available CPU cores, fallback to 8
+        #max_workers = 1
         logger.info(f"Processing {len(records_df)} records with {max_workers} workers")
 
         start_step, end_step, max_steps = get_step_for_windowing_and_split(config)
         print(f"Windowing and split between steps {start_step} and {end_step}")
 
-        
-
         # processing before windowing and split
-        results = process_records_parallel_wfdb(records_df, config, start_step, end_step, max_workers, output_manager, logger, log_file_path)
+        results = process_records_parallel_wfdb(records_df, config, start_step, end_step, 
+                                                max_workers, output_manager, logger, log_file_path, records_to_visualize)
         # Calculate metrics
         processing_time = time.time() - start_time
         successful_records = [r for r in results if r[1] > 0]

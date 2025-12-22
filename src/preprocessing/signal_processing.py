@@ -3,6 +3,8 @@ import numpy as np
 from typing import List, Tuple, Dict, Any
 from preprocessing.downsampling import create_downsampler
 from preprocessing.imputing import create_imputer
+from validation.visualize_steps import visualize_step_for_record
+import copy
 
 
 class DatasetCreationError(Exception):
@@ -122,7 +124,8 @@ def perform_signal_processing(
         process_until_step: int,
         metadata: Dict[str, Any],
         long_nan_removal_config: Dict[str, Any] = None,
-        logger: logging.Logger = None
+        logger: logging.Logger = None,
+        records_to_visualize = []
     ) -> Tuple[np.ndarray, List[str]]:
     """
     Perform signal processing on the filtered data.
@@ -139,7 +142,6 @@ def perform_signal_processing(
     # Get logger if not provided
     if logger is None:
         logger = logging.getLogger(__name__)
-    
 
     logger_infos = []
     
@@ -165,6 +167,8 @@ def perform_signal_processing(
     # get max steps for all channels
     max_steps = max(len(channel_config.get('steps', [])) for channel_config in signal_processing)
     for step_idx in range(start_at_processing_step, process_until_step):
+        # copy it in a way that we can compare before and after
+        processed_data_array_copy = copy.deepcopy(processed_data_array)
         for channel_name in filtered_names:
 
             # get channel config where channel_name matches "channel" in the list of dicts
@@ -192,7 +196,9 @@ def perform_signal_processing(
 
                         if to_downsample != {}:
                             #print(f"Downsampling channel {channel_name} at step {step_idx}")
+                            print("downsampling channel before:", len(channel))
                             channel, current_fs = downsample_record(channel, to_downsample, current_fs)
+                            print("downsampling channel after:", len(channel))
 
                         if to_data_cleaning != {}:
                             lower_threshold = to_data_cleaning.get('lower_threshold')
@@ -207,6 +213,14 @@ def perform_signal_processing(
                             channel = imputer.impute(processed_data_array[i], channel_name, metadata.get("imputer_path", ""))
                             
                         processed_data_array[i][channel_name] = channel
+
+        if metadata.get("record_id") in records_to_visualize:
+            visualize_step_for_record(
+                record_id=metadata.get("record_id", "unknown"),
+                step_id=step_idx,
+                processed_data_array_before=processed_data_array_copy,
+                processed_data_array_after=processed_data_array
+            )
 
 
         # check if a remove long nan sequence step needs to be applied

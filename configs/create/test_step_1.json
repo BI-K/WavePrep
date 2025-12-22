@@ -18,112 +18,35 @@
         "steps":[{
             "step": 0,
             "downsampling":{
-                "desired_resolution": 0.0166666666667,
-                "downsampling_strategy": "median"
-            },
-            "data_cleaning": {},
-            "imputation":{}
-        },
-        {
-            "step": 1,
-            "downsampling":{},
-            "data_cleaning": {
-                "lower_threshold": -15.0,
-                "upper_threshold": 50.0
-            },
-            "imputation": {}
-        },
-        {
-            "step": 2,
-            "downsampling":{},
-            "data_cleaning": {},
-            "imputation": {
-                "method": "hinrichs_paper"
-            }
-        },
-        {
-            "step": 3,
-            "downsampling":{
                 "desired_resolution": 0.00333333333333,
                 "downsampling_strategy": "median"
             },
             "data_cleaning": {},
-            "imputation": {}
+            "imputation":{}
         }
     ]},
     {"channel" : "HR",
         "steps":[{
             "step": 0,
             "downsampling":{
-                "desired_resolution": 0.0166666666667,
-                "downsampling_strategy": "median"
-            },
-            "data_cleaning": {},
-            "imputation":{}
-        },
-        {
-            "step": 1,
-            "downsampling":{},
-            "data_cleaning": {
-                "lower_threshold": 10.0,
-                "upper_threshold": 330.0
-            },
-            "imputation": {}
-        },
-        {
-            "step": 2,
-            "downsampling":{},
-            "data_cleaning": {},
-            "imputation": {
-                "method": "hinrichs_paper"
-            }
-        },
-        {
-            "step": 3,
-            "downsampling":{
                 "desired_resolution": 0.00333333333333,
                 "downsampling_strategy": "median"
             },
             "data_cleaning": {},
-            "imputation": {}
-        }]
+            "imputation":{}
+        }
+    ]
         },
 
         {"channel" : "SpO2",
         "steps":[{
             "step": 0,
             "downsampling":{
-                "desired_resolution": 0.0166666666667,
-                "downsampling_strategy": "median"
-            },
-            "data_cleaning": {},
-            "imputation":{}
-        },
-        {
-            "step": 1,
-            "downsampling":{},
-            "data_cleaning": {
-                "lower_threshold": 40.0,
-                "upper_threshold": 100.0
-            },
-            "imputation": {}
-        },
-        {
-            "step": 2,
-            "downsampling":{},
-            "data_cleaning": {},
-            "imputation": {
-                "method": "hinrichs_paper"
-            }
-        },
-        {
-            "step": 3,
-            "downsampling":{
                 "desired_resolution": 0.00333333333333,
                 "downsampling_strategy": "median"
             },
             "data_cleaning": {},
-            "imputation": {}
+            "imputation":{}
         }]
         }
     ],
@@ -136,7 +59,7 @@
     ],
 
     "windowing": {
-        "expected_resolution": 0.0166666666667,
+        "expected_resolution": 0.00333333333333,
         "observation_window": 3600,
         "prediction_horizon": 0,
         "prediction_window": 300,

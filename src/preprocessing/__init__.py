@@ -29,6 +29,7 @@ class AbstractImputer(ABC):
 
 
 
+
 class AbstractDownsampler(ABC):
     """Abstract base class for signal downsampling operations."""
     
@@ -46,6 +47,7 @@ class AbstractDownsampler(ABC):
             List of downsampled channels
         """
         pass
+
 
 
 class AbstractWindower(ABC):
@@ -76,3 +78,5 @@ class AbstractWindower(ABC):
             List of (observation_array, prediction_array) tuples
         """
         pass
+
+

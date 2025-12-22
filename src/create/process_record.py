@@ -224,7 +224,7 @@ def save_windows(snippets: List[dict],
 
 
 def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds: int, offset_end_seconds: int, start_at_step:int, until_step: int, config: Dict[str, Any], 
-                              output_manager, logger_name: str, row_index) -> Tuple[str, int, str, Dict[str, Any]]:
+                              output_manager, logger_name: str, row_index, records_to_visualize) -> Tuple[str, int, str, Dict[str, Any]]:
     """
     Create training samples from a single record.
     
@@ -266,6 +266,7 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         
         details.update(metadata)
         metadata["min_record_duration"] = config.get('validation', {}).get('min_record_duration', 7200)
+        metadata["record_id"] = record_id
         
         # Load signal data
         signal_data, channel_names, load_error = load_record_data_from_wfdb(record_path, offset_start_seconds, offset_end_seconds, config, logger)
@@ -300,7 +301,8 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
             start_at_processing_step=start_at_step,
             process_until_step=until_step,
             metadata=metadata, 
-            logger=logger  # Pass the logger
+            logger=logger,  # Pass the logger
+            records_to_visualize=records_to_visualize
         )        
 
         for logger_info in logger_infos:
