@@ -398,7 +398,7 @@ def load_record_data_from_split(record_path: str) -> Tuple[Optional[np.ndarray],
 
 
 def create_samples_from_record_from_split(split: str, subject: str, start_step: int, end_step: int, config: Dict[str, Any], 
-                              output_manager, logger_name: str, subject_index: int) -> Tuple[str, int, str, Dict[str, Any]]:
+                              output_manager, logger_name: str, subject_index: int, records_to_visualize=[]) -> Tuple[str, int, str, Dict[str, Any]]:
     """
     Create training samples from a single record.
     
@@ -432,7 +432,7 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
         metadata = {
             "min_record_duration": config.get('validation', {}).get('min_record_duration', 7200),
             "sampling_rate": current_fs[-1] if len(current_fs) > 0 else 1.0,
-            "imputer_path": config.get("output", {}).get("base_dir","") + "/data/iterative_imputer_X.pkl"
+            "imputer_path": config.get("output", {}).get("base_dir","") + "/data/iterative_imputer_X.pkl",
             }
 
         # read all file_names in subject_path
@@ -440,14 +440,19 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
         for record_file in record_files:
             record_path = os.path.join(subject_path, record_file)
 
+
             for type_record_path in [record_path, record_path.replace("observation", "prediction")]:
+
+                if "observation" in type_record_path:
+                    metadata["record_id"] = record_path.split('\\')[-1].split("_")[0] + "_observation"
+                else:
+                    metadata["record_id"] = record_path.split('\\')[-1].split("_")[0] + "_prediction" 
 
                 # Load signal data
                 df = pd.read_csv(type_record_path)
                 found_channels = df.columns
                 signal_data = df.to_numpy()
     
-
                 # Preprocessing Pipeline
                 processed_data_array, logger_infos = perform_signal_processing(
                     filtered_data=signal_data, 
@@ -456,7 +461,8 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
                     start_at_processing_step=start_step,
                     process_until_step=end_step,
                     metadata=metadata, 
-                    logger=logger  # Pass the logger
+                    logger=logger,  # Pass the logger
+                    records_to_visualize=records_to_visualize
                 )        
 
                 #print(processed_data_array)

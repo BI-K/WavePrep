@@ -196,9 +196,7 @@ def perform_signal_processing(
 
                         if to_downsample != {}:
                             #print(f"Downsampling channel {channel_name} at step {step_idx}")
-                            print("downsampling channel before:", len(channel))
                             channel, current_fs = downsample_record(channel, to_downsample, current_fs)
-                            print("downsampling channel after:", len(channel))
 
                         if to_data_cleaning != {}:
                             lower_threshold = to_data_cleaning.get('lower_threshold')
@@ -219,7 +217,8 @@ def perform_signal_processing(
                 record_id=metadata.get("record_id", "unknown"),
                 step_id=step_idx,
                 processed_data_array_before=processed_data_array_copy,
-                processed_data_array_after=processed_data_array
+                processed_data_array_after=processed_data_array,
+                signal_processing_config=signal_processing
             )
 
 
@@ -236,6 +235,9 @@ def perform_signal_processing(
                     processed_data_array.remove(processed_data)
                     logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs}s")
         
+            # TODO visualize long nan removal
+
+
         if len(processed_data_array) == 0:
             step_idx = max_steps  # to exit the loop
 

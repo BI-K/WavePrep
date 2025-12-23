@@ -152,7 +152,7 @@ def process_records_parallel_wfdb(records_df: pd.DataFrame, config: Dict[str, An
 
 
 def process_records_parallel_split(config: Dict[str, Any], start_step: int, end_step: int, max_workers: int,
-                           output_manager, logger, log_file_path=None) -> List[Tuple[str, int, str, Dict[str, Any]]]:
+                           output_manager, logger, log_file_path=None, records_to_visualize=[]) -> List[Tuple[str, int, str, Dict[str, Any]]]:
     """Process multiple records in parallel."""
     
     logger.info(f"Starting parallel processing with {max_workers} workers")
@@ -176,7 +176,7 @@ def process_records_parallel_split(config: Dict[str, Any], start_step: int, end_
 
             process_args = [
                     (split_path, subject, start_step, end_step,
-                    config, output_manager, logger_name, idx)
+                    config, output_manager, logger_name, idx, records_to_visualize)
                     for idx, subject in enumerate(split_subjects)
             ]
                 
@@ -377,7 +377,7 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         if max_steps > end_step:
             # another round of processing, but load data from disc instead of wfdb
             print("Processing records after split and before windowing")
-            results = process_records_parallel_split(config, end_step, max_steps, max_workers, output_manager, logger, log_file_path)
+            results = process_records_parallel_split(config, end_step, max_steps, max_workers, output_manager, logger, log_file_path, records_to_visualize)
 
             # Calculate metrics
             processing_time = time.time() - start_time

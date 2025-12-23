@@ -23,6 +23,23 @@
             },
             "data_cleaning": {},
             "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": -15.0,
+                "upper_threshold": 50.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
         }
     ]},
     {"channel" : "HR",
@@ -34,6 +51,23 @@
             },
             "data_cleaning": {},
             "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 10.0,
+                "upper_threshold": 330.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
         }
     ]
         },
@@ -47,14 +81,24 @@
             },
             "data_cleaning": {},
             "imputation":{}
-        }]
-        }
-    ],
-
-    "long_nan_seq_removal": [
+        },
         {
-            "after_step": 1,
-            "max_consecutive_nans": 15
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 40.0,
+                "upper_threshold": 100.0
+            },
+            "imputation": {}
+        },
+        {
+            "step": 2,
+            "downsampling": {},
+            "data_cleaning": {},
+            "imputation": {
+                "method": "hinrichs_paper"
+            }
+        }]
         }
     ],
 
