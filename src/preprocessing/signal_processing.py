@@ -3,7 +3,7 @@ import numpy as np
 from typing import List, Tuple, Dict, Any
 from preprocessing.downsampling import create_downsampler
 from preprocessing.imputing import create_imputer
-from validation.visualize_steps import visualize_step_for_record
+from validation.visualize_steps import visualize_step_for_record, visualize_long_nan_removal_for_record
 import copy
 
 
@@ -54,6 +54,7 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
     cleaned_processed_data_array = []
 
     logger_infos = []
+    non_nan_sequences_each_data_array = []
 
     for processed_data in processed_data_array:
         nan_sequences = []
@@ -82,6 +83,7 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
         for i in range(len(merged_sequences)):
             logger_infos.append(f"Removed long NaN sequence: step={step_idx}, start={merged_sequences[i][0]}, end={merged_sequences[i][1]}")
 
+
         if merged_sequences:
             # caluclate non-nan sequences from merged nan sequences
             non_nan_sequences = [(0, merged_sequences[0][0])]
@@ -90,6 +92,7 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
                 
             non_nan_sequences.append((merged_sequences[-1][1], int(len(next(iter(processed_data.values()))))))
 
+            non_nan_sequences_each_data_array.append(non_nan_sequences)
             for start, end in non_nan_sequences:
                 if end - start <= 0:
                     continue
@@ -99,7 +102,7 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
 
                 cleaned_processed_data_array.append(snippet)
 
-    return cleaned_processed_data_array, logger_infos
+    return cleaned_processed_data_array, logger_infos, non_nan_sequences_each_data_array
 
         
 
@@ -226,7 +229,7 @@ def perform_signal_processing(
         if long_nan_removal_config_dict.get(step_idx) is not None:
             processed_data_array_copy = copy.deepcopy(processed_data_array)
             max_consecutive_nans = long_nan_removal_config_dict.get(step_idx)
-            processed_data_array, new_logger_infos = remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_nans)
+            processed_data_array, new_logger_infos, non_nan_sequences = remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_nans)
             logger_infos.extend(new_logger_infos)
 
             # remove everything that does not meet the "min_record_duration" requirement
@@ -240,7 +243,15 @@ def perform_signal_processing(
                     processed_data_array.append(processed_data)
                 else:
                     logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs[filtered_names[0]]}s")
-            # TODO visualize long nan removal
+            
+            visualize_long_nan_removal_for_record(
+                record_id=metadata.get("record_id", "unknown"),
+                step_id=step_idx,
+                processed_data_array_before=processed_data_array_copy,
+                processed_data_array_after=processed_data_array,
+                non_nan_sequences=non_nan_sequences,
+                min_required_length=metadata.get("min_record_duration", 0) * current_fs[filtered_names[0]],
+            )
 
 
         if len(processed_data_array) == 0:

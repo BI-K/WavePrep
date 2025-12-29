@@ -217,9 +217,39 @@ def _visualize_all_channels_for_record(data_array, number_of_additional_subplots
                
     return fig, axes
 
-def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, long_nan_config):
-    # TODO
-    pass
+def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, non_nan_sequences, min_required_length):
+    
+    data_array = processed_data_array_before[0] # onlöy first entry
+    fig, axes = _visualize_all_channels_for_record(data_array)
+    channels = list(data_array.keys())
+
+    if len(non_nan_sequences) == 0:
+        for ax in axes:
+            ax.axvline(x=-0.5, color='red', linestyle='-', alpha=0.7)
+            ax.axvline(x=len(data_array[channels[0]]) + 0.5, color='red', linestyle='-', alpha=0.7)
+            ax.axvspan(- 0.5, len(data_array[channels[0]]) + 0.5, color='green', alpha=0.5)
+    else:
+        non_nan_sequences_for_data_array = non_nan_sequences[0]  # only first entry
+        prev_end = 0
+        for start, end in non_nan_sequences_for_data_array:
+            for ax in axes:
+                ax.axvspan(prev_end + 0.5, start - 0.5, color='grey', alpha=0.5)
+                ax.axvline(x=start - 0.5, color='red', linestyle='-', alpha=0.7)
+                ax.axvline(x=end + 0.5, color='red', linestyle='-', alpha=0.7)
+
+                #  also vizualize the segments removed due to insufficient duration
+                if end - start < min_required_length:
+                    ax.axvspan(start - 0.5, end + 0.5, color='blue', alpha=0.5)
+                else:
+                    ax.axvspan(start - 0.5, end + 0.5, color='green', alpha=0.5)
+
+            prev_end = end
+
+
+
+    fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
+    fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_long_nan_removal.png")
+    plt.close(fig)
 
 
 def visualize_windowing_for_record( record_id: str, step_id: int, windows, processed_data_array, observation_window,
@@ -295,7 +325,7 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
             channel_idx = 0
             for channel in channels_before:
                 if channel not in channels_after:
-                    # TODO do soemthing
+                    # TODO do something
                     print(f"Channel {channel} not in after data, skipping visualization for this channel.")
                     continue
                 # get step type from config
@@ -363,21 +393,3 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
             fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} Visualization (Zoomed In)", fontsize=16)
             fig_zoom.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_zoomed.png")
             plt.close(fig_zoom)
-            # match step_type:
-            #    case 'downsampling':
-            #        self.visualize_downsampling_for_record(record_id, step_id, data_before, data_after)
-            #    case 'data_cleaning':
-            #        pass
-            #    case 'imputing':
-            #        pass 
-            #    case _:
-            #        pass
-        #else:
-        #    pass 
-        
-
-    # for step -> array of cut records
-    # long nan sequence removal
-
-    # for array of cut records
-    # windowing
