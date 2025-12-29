@@ -26,6 +26,7 @@ from preprocessing.signal_processing import perform_signal_processing
 from preprocessing.imputing import is_imputer_that_needs_split
 
 from validation.validation import validate_record, generate_detailed_analysis, analyze_nan_values, save_reports
+from validation.visualize_steps import visualize_windowing_for_record
 
 
 def get_logger(name: str = None) -> logging.Logger:
@@ -335,6 +336,9 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
             windower = create_windower()
             
             logger.info(f"Creating windows for record {record_id}")
+
+
+
             windows = windower.create_windows(
                 processed_data_array,
                 observation_window,
@@ -343,6 +347,7 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
                 step,
                 expected_resolution
             )
+            visualize_windowing_for_record(record_id, until_step, windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution)
 
             if not windows:
                 return record_id, 0, "No valid windows created", details

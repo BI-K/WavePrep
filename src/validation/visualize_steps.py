@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Any
 import numpy as np
 import random
+import math
 
 import matplotlib.pyplot as plt
 
@@ -32,7 +33,6 @@ def beautify_axes(axes, channel_idx, data_before, data_after):
     data_after = np.array(data_after)
     data_after_clean = data_after[~np.isnan(data_after)]
 
-    # TODO this doesn't seem to work 
     axes[channel_idx * 2].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
     axes[channel_idx * 2 + 1].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
 
@@ -174,7 +174,7 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
             axes[channel_id * 2].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
             axes[channel_id * 2 + 1].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
 
-        #axes = beautify_axes(axes, channel_id, data_before, data_after_expanded)
+        axes = beautify_axes(axes, channel_id, data_before, data_after_expanded)
         
         # zoomed in version - use original data for zoom since it's small
         # zoomed in version - use original data for zoom since it's small
@@ -196,16 +196,84 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
             axes_zoom[channel_id * 2].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
             axes_zoom[channel_id * 2 + 1].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
 
-        #axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
+        axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         return fig, fig_zoom, axes, axes_zoom
 
+
+def _visualize_all_channels_for_record(data_array, number_of_additional_subplots=0):
+
+    channels = list(data_array.keys())
+
+    fig = plt.figure(figsize=(10, 5))
+    gs = fig.add_gridspec(len(channels) + number_of_additional_subplots, hspace=0, figure=fig)
+    axes = gs.subplots(sharex=True, sharey=False)
+    channel_idx = 0
+    for channel in channels:
+        axes[channel_idx].plot(data_array[channel], label=f'Channel: {channel}', alpha=0.7)
+        axes[channel_idx].scatter(range(len(data_array[channel])), data_array[channel], label=f'Channel: {channel}', alpha=0.7, s=10, marker='x')
+        axes[channel_idx].set_ylabel(f'{channel}')
+        channel_idx += 1
+               
+    return fig, axes
+
 def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, long_nan_config):
+    # TODO
     pass
 
 
-def visualize_windowing_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after):
-    pass
+def visualize_windowing_for_record( record_id: str, step_id: int, windows, processed_data_array, observation_window,
+                prediction_horizon, prediction_window, step, expected_resolution):
+
+    data_array = processed_data_array[0]  # only first entry
+    step_size = expected_resolution * step
+    observation_window_size = expected_resolution * observation_window
+    prediction_horizon_size = expected_resolution * prediction_horizon
+    prediction_window_size = expected_resolution * prediction_window
+
+    channels = list(data_array.keys())
+    number_of_windows_to_visualize = min(10, len(windows[channels[0]]))
+
+    total_size_max_ten_windows = math.ceil((observation_window_size + prediction_horizon_size + prediction_window_size) * number_of_windows_to_visualize)
+    zoom_snippet = min(len(data_array[channels[0]]), total_size_max_ten_windows)
+    zoom_levels = [len(data_array[channels[0]]), zoom_snippet]
+
+    for zoom_idx in range(len(zoom_levels)):
+
+        snipped_data_array = dict()
+        for channel in channels:
+            snipped_data_array[channel] = data_array[channel][:zoom_levels[zoom_idx]]
+        
+        fig, axes = _visualize_all_channels_for_record(snipped_data_array, number_of_additional_subplots=1)
+
+        # only show for a limited number of windows - e.g. 10
+        for i in range(number_of_windows_to_visualize):
+            axes[-1].hlines(y=i, xmin=step_size * i, xmax= step_size * i + observation_window_size, color='blue', alpha=0.7)  # h line for observation window
+            axes[-1].hlines(y=i, xmin=step_size * i + observation_window_size + prediction_horizon_size, xmax= step_size * i + observation_window_size + prediction_horizon_size + prediction_window_size, color='red', alpha=0.7)  # h line for prediction window
+            axes[-1].vlines(x=step_size * i, ymin=i, ymax = number_of_windows_to_visualize - 0.5, color='blue', linestyle='-', alpha=0.7)
+            axes[-1].vlines(x=step_size * i + observation_window_size, ymin=i, ymax = number_of_windows_to_visualize - 0.5, color='blue', linestyle='-', alpha=0.7)
+            axes[-1].vlines(x=step_size * i + observation_window_size + prediction_horizon_size, ymin=i, ymax = number_of_windows_to_visualize - 0.5, color='red', linestyle='-', alpha=0.7)
+            axes[-1].vlines(x=step_size * i + observation_window_size + prediction_horizon_size + prediction_window_size, ymin=i, ymax = number_of_windows_to_visualize - 0.5, color='red', linestyle='-', alpha=0.7)  
+
+            for ax in axes[:-1]:
+                ax.axvline(x=step_size * i, color='blue', linestyle='-', alpha=0.7)
+                ax.axvline(x=step_size * i + observation_window_size, color='blue', linestyle='-', alpha=0.7)
+                ax.axvline(x=step_size * i + observation_window_size + prediction_horizon_size, color='red', linestyle='-', alpha=0.7)
+                ax.axvline(x=step_size * i + observation_window_size + prediction_horizon_size + prediction_window_size, color='red', linestyle='-', alpha=0.7)
+
+            #window_subplot = plt.figure(2,1)
+            #gs_subplots = window_subplot.add_gridspec(2, vspace=0, figure=window_subplot)
+            #axes_subplots = gs_subplots.subplots(sharex=False, sharey=True)
+            #axes_subplots[0].plot(windows[i]['observation_window'], label='Observation Window', alpha=0.7, color='blue')
+            #axes_subplots[1].plot(windows[i]['prediction_window'], label='Prediction Window', alpha=0.7, color='red')
+            
+        if zoom_idx == 0:
+            fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Windowing (Full Length)", fontsize=16)
+            fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_windowing_full_length.png")
+        else:
+            fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Windowing  (Zoomed In)", fontsize=16)
+            fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_windowing_zoomed.png")
+        plt.close(fig)
 
 def visualize_step_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, signal_processing_config):
 
