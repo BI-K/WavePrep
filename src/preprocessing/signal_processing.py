@@ -56,7 +56,7 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
     logger_infos = []
 
     for processed_data in processed_data_array:
-        nan_sequences = set()
+        nan_sequences = []
 
         # get start and end indices of nan sequences longer than max_consecutive_nans
         for channel_name, channel in processed_data.items():
@@ -70,17 +70,15 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
             start_indices = start_indices[lengths > max_consecutive_nans]
             end_indices = end_indices[lengths > max_consecutive_nans]
 
-            nan_sequences.add(zip(start_indices, end_indices))
+            if start_indices.size > 0 and end_indices.size > 0:
+                nan_sequences.append(zip(start_indices, end_indices))
 
-        # merge overlapping sequences
         merged_sequences = []
-        for start, end in sorted(nan_sequences):
-            if not merged_sequences or start > merged_sequences[-1][1]:
+        for nan_seq in nan_sequences:
+            # merge overlapping sequences
+            for start, end in sorted(nan_seq):
                 merged_sequences.append([start, end])
-            else:
-                merged_sequences[-1][1] = max(merged_sequences[-1][1], end)
         
-
         for i in range(len(merged_sequences)):
             logger_infos.append(f"Removed long NaN sequence: step={step_idx}, start={merged_sequences[i][0]}, end={merged_sequences[i][1]}")
 
@@ -166,7 +164,12 @@ def perform_signal_processing(
     # process step by step 
     # get max steps for all channels
     max_steps = max(len(channel_config.get('steps', [])) for channel_config in signal_processing)
+    # for donwsampling we need the current fs
+    current_fs = {}
+    for channel_name in filtered_names:
+        current_fs[channel_name] = metadata['sampling_rate']
     for step_idx in range(start_at_processing_step, process_until_step):
+
         # copy it in a way that we can compare before and after
         processed_data_array_copy = copy.deepcopy(processed_data_array)
         for channel_name in filtered_names:
@@ -187,16 +190,13 @@ def perform_signal_processing(
                     for i in range(len(processed_data_array)):
                         channel = processed_data_array[i][channel_name]
 
-                        # for donwsampling we need the current fs
-                        current_fs = metadata['sampling_rate']
-
                         to_downsample = current_step.get("downsampling", {})
                         to_data_cleaning = current_step.get("data_cleaning", {})
                         to_imputation = current_step.get("imputation", {})
 
                         if to_downsample != {}:
                             #print(f"Downsampling channel {channel_name} at step {step_idx}")
-                            channel, current_fs = downsample_record(channel, to_downsample, current_fs)
+                            channel, current_fs[channel_name] = downsample_record(channel, to_downsample, current_fs[channel_name])
 
                         if to_data_cleaning != {}:
                             lower_threshold = to_data_cleaning.get('lower_threshold')
@@ -224,17 +224,22 @@ def perform_signal_processing(
 
         # check if a remove long nan sequence step needs to be applied
         if long_nan_removal_config_dict.get(step_idx) is not None:
+            processed_data_array_copy = copy.deepcopy(processed_data_array)
             max_consecutive_nans = long_nan_removal_config_dict.get(step_idx)
             processed_data_array, new_logger_infos = remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_nans)
             logger_infos.extend(new_logger_infos)
 
             # remove everything that does not meet the "min_record_duration" requirement
-            for processed_data in processed_data_array:
+            intermediate_processed_data_array = copy.deepcopy(processed_data_array)
+            processed_data_array = []
+            for i in range(len(intermediate_processed_data_array)):
+                processed_data = intermediate_processed_data_array[i]
                 total_length = len(next(iter(processed_data.values())))
-                if total_length / current_fs < metadata.get("min_record_duration", 0):
-                    processed_data_array.remove(processed_data)
-                    logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs}s")
-        
+                # TODO more elegant solution to get current fs
+                if total_length / current_fs[filtered_names[0]] >= metadata.get("min_record_duration", 0):
+                    processed_data_array.append(processed_data)
+                else:
+                    logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs[filtered_names[0]]}s")
             # TODO visualize long nan removal
 
 

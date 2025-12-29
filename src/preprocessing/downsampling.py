@@ -56,11 +56,13 @@ class MedianDownsampler(AbstractDownsampler):
         downsample_factor = int(original_fs / target_fs)
 
         # keep first entry of array
-        #first_entry = channel[0]
+        first_entry = channel[0]
         channel = channel [1:]
         trim_len = (len(channel) // downsample_factor) * downsample_factor
         trimmed_channel = channel[:trim_len]
         downsampled_array = np.median(trimmed_channel.reshape(-1, downsample_factor), axis=1)
+
+        downsampled_array = np.concatenate(([first_entry], downsampled_array))
         #downsampled_array = np.concatenate(([first_entry], downsampled_array))  
         return downsampled_array
 

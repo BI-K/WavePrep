@@ -27,22 +27,37 @@ def initialize_visualization(list_of_all_records, config):
         return records_including_after_split
         
     
+def beautify_axes(axes, channel_idx, data_before, data_after):
+    data_before_clean = data_before[~np.isnan(data_before)]
+    data_after = np.array(data_after)
+    data_after_clean = data_after[~np.isnan(data_after)]
+
+    # TODO this doesn't seem to work 
+    axes[channel_idx * 2].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
+    axes[channel_idx * 2 + 1].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
+
+    return axes
+
 # for step -> for channel -> array of cut records
 # downsampling (input_channel, output_channel) -> less data <- done :)
 # data cleaning (input_channel, output_channel) -> less data (more np values) <- done :)
 # imputing (input_channel, output_channel) -> nan replaced by imputed values 
 
 def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, record_id: str, step_id: int, channel_id, data_before, data_after):
-       
+
         # plot two lines one for data_before and one for data_after
         axes[channel_id * 2].plot(data_before, label='Before Imputation', alpha=0.7, color='blue')
+        axes[channel_id * 2].scatter(range(len(data_before)), data_before, label='Before Imputation', alpha=0.7, color='blue', s=10, marker='x')
         axes[channel_id * 2 + 1].plot(data_after, label='After Imputation', alpha=0.7, color='red')
+        axes[channel_id * 2 + 1].scatter(range(len(data_after)), data_after, label='After Imputation', alpha=0.7, color='red', s=10, marker='x')
 
         # background of values with nan should be highlighted
         nan_indices_before = np.where(np.isnan(data_before))[0]
         nan_indices_after = np.where(np.isnan(data_after))[0]
         nan_indices_union = set(nan_indices_before).union(set(nan_indices_after))
         filled_nan_indices = [idx for idx in nan_indices_union if idx in nan_indices_before and idx not in nan_indices_after]
+        
+
         for nan_index in filled_nan_indices:
             axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='green', alpha=0.5)
 
@@ -52,11 +67,8 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
         for nan_index in nan_indices_after:
             axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        # remove nan from data_before
-        data_before_clean = data_before[~np.isnan(data_before)]
-        data_after_clean = data_after[~np.isnan(data_after)]
-        axes[channel_id * 2].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
-        axes[channel_id * 2 + 1].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
+        axes = beautify_axes(axes, channel_id, data_before, data_after)
+    
 
         # zoomed in version - use original data for zoom since it's small
         if len(data_before) < _zoom_snippet:
@@ -67,7 +79,9 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
             data_after_zoom = data_after[:_zoom_snippet]
         # plot two lines one for data_before and one for data_after
         axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Imputation', alpha=0.7, color='blue')
+        axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Imputation', alpha=0.7, color='blue', s=10, marker='x')
         axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Imputation', alpha=0.7, color='red')
+        axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom)), data_after_zoom, label='After Imputation', alpha=0.7, color='red', s=10, marker='x')
 
         # background of values with nan should be highlighted
         nan_indices_before = np.where(np.isnan(data_before_zoom))[0]
@@ -83,12 +97,7 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
         for nan_index in nan_indices_after:
             axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        data_before_clean_zoom = data_before_zoom[~np.isnan(data_before_zoom)]
-        data_after_clean_zoom = data_after_zoom[~np.isnan(data_after_zoom)]
-        axes_zoom[channel_id * 2].set_xlim(0, min(len(data_before_zoom), _zoom_snippet))
-        axes_zoom[channel_id * 2 + 1].set_xlim(0, min(len(data_before_zoom), _zoom_snippet))
-        axes_zoom[channel_id * 2].set_ylim(min(np.min(data_before_clean_zoom), np.min(data_after_clean_zoom)) - 1, max(np.max(data_before_clean_zoom), np.max(data_after_clean_zoom)) + 1)
-        axes_zoom[channel_id * 2 + 1].set_ylim(min(np.min(data_before_clean_zoom), np.min(data_after_clean_zoom)) - 1, max(np.max(data_before_clean_zoom), np.max(data_after_clean_zoom)) + 1)
+        axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         return fig, fig_zoom, axes, axes_zoom
 
@@ -98,7 +107,9 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
         
         # plot two lines one for data_before and one for data_after
         axes[channel_id * 2].plot(data_before, label='Before Data Cleaning', alpha=0.7, color='blue')
+        axes[channel_id * 2].scatter(range(len(data_before)), data_before, label='Before Data Cleaning', alpha=0.7, color='blue', s=10, marker='x')
         axes[channel_id * 2 + 1].plot(data_after, label='After Data Cleaning', alpha=0.7, color='red')
+        axes[channel_id * 2 + 1].scatter(range(len(data_after)), data_after, label='After Data Cleaning', alpha=0.7, color='red', s=10, marker='x')
 
         # background of values with nan should be highlighted
         nan_indices_before = np.where(np.isnan(data_before))[0]
@@ -110,8 +121,7 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
             axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
             # axes[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        axes[channel_id * 2].set_ylim(min(np.min(data_before), np.min(data_after)) - 1, max(np.max(data_before), np.max(data_after)) + 1)
-        axes[channel_id * 2 + 1].set_ylim(min(np.min(data_before), np.min(data_after)) - 1, max(np.max(data_before), np.max(data_after)) + 1)
+        axes = beautify_axes(axes, channel_id, data_before, data_after)
 
         # zoomed in version - use original data for zoom since it's small
         if len(data_before) < _zoom_snippet:
@@ -122,7 +132,9 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
             data_after_zoom = data_after[:_zoom_snippet]
         # plot two lines one for data_before and one for data_after
         axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Data Cleaning', alpha=0.7, color='blue')
+        axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Data Cleaning', alpha=0.7, color='blue', s=10, marker='x')
         axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red')
+        axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom)), data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red', s=10, marker='x')
 
         # background of values with nan should be highlighted
         nan_indices_before = np.where(np.isnan(data_before_zoom))[0]
@@ -134,11 +146,8 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
             axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
             # axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        axes_zoom[channel_id * 2].set_xlim(0, min(len(data_before_zoom), _zoom_snippet))
-        axes_zoom[channel_id * 2 + 1].set_xlim(0, min(len(data_before_zoom), _zoom_snippet))
-        axes_zoom[channel_id * 2].set_ylim(min(np.min(data_before_zoom), np.min(data_after_zoom)) - 1, max(np.max(data_before_zoom), np.max(data_after_zoom)) + 1)
-        axes_zoom[channel_id * 2 + 1].set_ylim(min(np.min(data_before_zoom), np.min(data_after_zoom)) - 1, max(np.max(data_before_zoom), np.max(data_after_zoom)) + 1)
-        
+        axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
+
         return fig, fig_zoom, axes, axes_zoom
 
 
@@ -146,25 +155,27 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
 
         # calculate downsampling factor based on original data
         downsampling_factor = len(data_before) // len(data_after)
+        channel_after = np.array(data_after)
 
         # fill up data_after to match length of data_before for visualization
         data_after_expanded = []
+        data_after_expanded_with_nans = []
         for data_point in data_after:
             data_after_expanded.extend([data_point] * downsampling_factor)
-    
-        # TODO potentially add the points as scatter to show the actual data (which is ofc not linear)
+            data_after_expanded_with_nans.extend([data_point] + [np.nan] * (downsampling_factor - 1))
 
         # plot two lines one for data_before and one for data_after
         axes[channel_id * 2].plot(data_before, label='Before Downsampling', alpha=0.7, color='blue')
+        axes[channel_id * 2].scatter(range(len(data_before)), data_before, label='Before Downsampling', alpha=0.7, color='blue', s=10, marker='x')
         axes[channel_id * 2 + 1].plot(data_after_expanded, label='After Downsampling', alpha=0.7, color='red')
+        axes[channel_id * 2 + 1].scatter(range(len(data_after_expanded_with_nans)), data_after_expanded_with_nans, label='After Downsampling', alpha=0.7, color='red', s=10, marker='x')
         # add a vline every downsampling_factor
         for i in range(0, len(data_before), downsampling_factor):
             axes[channel_id * 2].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
             axes[channel_id * 2 + 1].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
 
-        axes[channel_id * 2].set_ylim(min(np.min(data_before), np.min(data_after_expanded)) - 1, max(np.max(data_before), np.max(data_after_expanded)) + 1)
-        axes[channel_id * 2 + 1].set_ylim(min(np.min(data_before), np.min(data_after_expanded)) - 1, max(np.max(data_before), np.max(data_after_expanded)) + 1)
-
+        #axes = beautify_axes(axes, channel_id, data_before, data_after_expanded)
+        
         # zoomed in version - use original data for zoom since it's small
         # zoomed in version - use original data for zoom since it's small
         if len(data_before) < _zoom_snippet:
@@ -173,23 +184,28 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
         else:
             data_before_zoom = data_before[:_zoom_snippet]
             data_after_zoom = data_after_expanded[:_zoom_snippet]
+            data_after_zoom_with_nans = data_after_expanded_with_nans[:_zoom_snippet]
 
         # plot two lines one for data_before and one for data_after
         axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Downsampling', alpha=0.7, color='blue')
+        axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Downsampling', alpha=0.7, color='blue', s=10, marker='x')
         axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Downsampling', alpha=0.7, color='red')
+        axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom_with_nans)), data_after_zoom_with_nans, label='After Downsampling', alpha=0.7, color='red', s=10, marker='x')
         # add a vline every downsampling_factor
         for i in range(0, len(data_before), downsampling_factor):
             axes_zoom[channel_id * 2].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
             axes_zoom[channel_id * 2 + 1].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
 
-        axes_zoom[channel_id * 2].set_xlim(0, min(len(data_before_zoom), _zoom_snippet))
-        axes_zoom[channel_id * 2 + 1].set_xlim(0, min(len(data_before_zoom), _zoom_snippet))
-        axes_zoom[channel_id * 2].set_ylim(min(np.min(data_before_zoom), np.min(data_after_zoom)) - 1, max(np.max(data_before_zoom), np.max(data_after_zoom)) + 1)
-        axes_zoom[channel_id * 2 + 1].set_ylim(min(np.min(data_before_zoom), np.min(data_after_zoom)) - 1, max(np.max(data_before_zoom), np.max(data_after_zoom)) + 1)
-        
+        #axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
+
         return fig, fig_zoom, axes, axes_zoom
 
+def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, long_nan_config):
+    pass
 
+
+def visualize_windowing_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after):
+    pass
 
 def visualize_step_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, signal_processing_config):
 
@@ -230,6 +246,7 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
                     step_type = 'data_cleaning'
                 if current_step.get("imputation", {}) != {}:
                     step_type = 'imputation'
+                
 
                 match step_type:
                     case 'downsampling':
@@ -252,16 +269,29 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
 
             # 
             fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization", fontsize=16)
+            max_len = 0
+            for channel in channels_before:
+                if max(len(data_before[channel]), len(data_after[channel])) > max_len:
+                    max_len = max(len(data_before[channel]), len(data_after[channel]))
             for ax in axes:
                 ax.label_outer()
+                if max_len > 1:
+                    ax.set_xlim(0, max_len)
+                else:
+                    ax.set_xlim(-1, 1)
             fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}.png")
             plt.close(fig)
 
-            # limit x axis to zoom snippet length
-            for ax in axes_zoom:
-                ax.set_xlim(0, _zoom_snippet)
+            max_len = 0
+            for channel in channels_before:
+                if min(len(data_before[channel]), _zoom_snippet) > max_len:
+                    max_len = min(len(data_before[channel]), _zoom_snippet)
             for ax in axes_zoom:
                 ax.label_outer()
+                if max_len > 1:
+                    ax.set_xlim(0, max_len)
+                else:
+                    ax.set_xlim(-1, 1)
             fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} Visualization (Zoomed In)", fontsize=16)
             fig_zoom.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_zoomed.png")
             plt.close(fig_zoom)

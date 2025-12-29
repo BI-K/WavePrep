@@ -42,6 +42,7 @@ class HinrichsPaperImputer(AbstractImputer):
                 imputed_data = imputer.transform(processed_data_array)
                 channel = imputed_data[:, channel_idx].flatten()
 
+        channel = np.array(channel)
         return channel
 
 

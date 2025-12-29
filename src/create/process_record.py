@@ -294,12 +294,14 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         
         # Preprocessing Pipeline
         long_nan_removal_config = config.get('long_nan_seq_removal', None)
+        print(f"Processing record {record_id} perform signal processing from wfdb")
         processed_data_array, logger_infos = perform_signal_processing(
             filtered_data=filtered_data, 
             filtered_names=filtered_names, 
             signal_processing=signal_configs, 
             start_at_processing_step=start_at_step,
             process_until_step=until_step,
+            long_nan_removal_config = long_nan_removal_config,
             metadata=metadata, 
             logger=logger,  # Pass the logger
             records_to_visualize=records_to_visualize
@@ -318,7 +320,10 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         #                nan_diagnostic = analyze_nan_values(data, channel_name)
         #                return record_id, 0, f"NaN values detected after processing in channel {channel_name}: {nan_diagnostic}", details
         
-
+        if len(processed_data_array) == 0:
+            return record_id, 0, "No valid processed data after preprocessing", details
+        
+        print(f"Creating samples for record {record_id}")
         # Create windows
         windowing_config = config.get('windowing', {})
         if windowing_config != {}:
@@ -460,6 +465,7 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
                     signal_processing=signal_configs, 
                     start_at_processing_step=start_step,
                     process_until_step=end_step,
+                    long_nan_removal_config = long_nan_removal_config,
                     metadata=metadata, 
                     logger=logger,  # Pass the logger
                     records_to_visualize=records_to_visualize
