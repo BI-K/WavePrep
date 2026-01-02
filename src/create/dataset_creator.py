@@ -56,7 +56,6 @@ def load_record_list(config: Dict[str, Any], logger) -> pd.DataFrame:
         raise FileNotFoundError(f"Records file not found: {records_file}")
 
     records_df = pd.read_csv(records_file)
-    print(records_df.head())
     records_df["subject_id"] = records_df["record"].apply(lambda x: x.split('-')[0])
     records_df["subject_dir"] = records_df["subject_id"].apply(lambda x: f"p{x[1:3]}")
     records_df["full_path"] = records_df.apply(lambda x: f"{x['subject_dir']}/{x['subject_id']}/{x['record']}", axis=1)
@@ -373,9 +372,7 @@ def create_samples_from_record(record_path: str, offset_start_seconds: int, offs
                     return record_id, 0, f"NaN values detected in {len(windows_with_nans)}/{len(windows)} windows", details
         
         # Save samples
-        print("filtered_names", filtered_names)
         filtered_names = [channel_config["channel"] for channel_config in signal_configs]
-        print("filtered_names", filtered_names)
         samples_saved = save_samples(windows, filtered_names, record_id, subject_id, 
                                    config, output_manager, logger, row_index)
         

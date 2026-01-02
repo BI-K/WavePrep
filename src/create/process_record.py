@@ -296,7 +296,6 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         
         # Preprocessing Pipeline
         long_nan_removal_config = config.get('long_nan_seq_removal', None)
-        print(f"Processing record {record_id} perform signal processing from wfdb")
         processed_data_array, logger_infos = perform_signal_processing(
             filtered_data=filtered_data, 
             filtered_names=filtered_names, 
@@ -325,7 +324,6 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         if len(processed_data_array) == 0:
             return record_id, 0, "No valid processed data after preprocessing", details
         
-        print(f"Creating samples for record {record_id}")
         # Create windows
         windowing_config = config.get('windowing', {})
         if windowing_config != {}:
@@ -337,8 +335,6 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
             windower = create_windower()
             
             logger.info(f"Creating windows for record {record_id}")
-
-
 
             windows = windower.create_windows(
                 processed_data_array,
@@ -401,7 +397,6 @@ def load_record_data_from_split(record_path: str) -> Tuple[Optional[np.ndarray],
         observation_signal_data = observation_df.to_numpy()
         prediction_signal_data = prediction_df.to_numpy()
 
-            
         return observation_signal_data, prediction_signal_data, observation_found_channels, prediction_found_channels, ""
         
     except Exception as e:
@@ -449,6 +444,8 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
 
         # read all file_names in subject_path
         record_files = os.listdir(subject_path)
+        # sort by name
+        record_files.sort()
         for record_file in record_files:
             record_path = os.path.join(subject_path, record_file)
 
@@ -456,9 +453,10 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
             for type_record_path in [record_path, record_path.replace("observation", "prediction")]:
 
                 if "observation" in type_record_path:
-                    metadata["record_id"] = record_path.split('\\')[-1].split("_")[0] + "_observation"
+                    metadata["record_id"] = record_path.split("\\")[-1].split(".csv")[0] + "_observation"
                 else:
-                    metadata["record_id"] = record_path.split('\\')[-1].split("_")[0] + "_prediction" 
+                    metadata["record_id"] = record_path.split("\\")[-1].split(".csv")[0] + "_prediction" 
+
 
                 # Load signal data
                 df = pd.read_csv(type_record_path)

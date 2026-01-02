@@ -603,7 +603,6 @@ def split_dataset(config: Dict[str, Any], logger, output_dir: Path = None) -> Di
     
     # Resolve input path
     input_path = Path(config.get("output", {}).get("base_dir") + "/data")
-    print(f"Input path before resolving latest: {input_path}")
     
     # Discover subjects and samples
     subjects_data = discover_subjects_and_samples(input_path, logger)
