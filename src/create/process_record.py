@@ -268,6 +268,7 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         details.update(metadata)
         metadata["min_record_duration"] = config.get('validation', {}).get('min_record_duration', 7200)
         metadata["record_id"] = record_id
+        metadata["output_path_process_images"] = config.get("output", {}).get("base_dir","") + "/reports/process_images"
         
         # Load signal data
         signal_data, channel_names, load_error = load_record_data_from_wfdb(record_path, offset_start_seconds, offset_end_seconds, config, logger)
@@ -347,7 +348,7 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
                 step,
                 expected_resolution
             )
-            visualize_windowing_for_record(record_id, until_step, windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution)
+            visualize_windowing_for_record(record_id, until_step - 1 , windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution, output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"))
 
             if not windows:
                 return record_id, 0, "No valid windows created", details
@@ -443,6 +444,7 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
             "min_record_duration": config.get('validation', {}).get('min_record_duration', 7200),
             "sampling_rate": current_fs[-1] if len(current_fs) > 0 else 1.0,
             "imputer_path": config.get("output", {}).get("base_dir","") + "/data/iterative_imputer_X.pkl",
+            "output_path_process_images": config.get("output", {}).get("base_dir","") + "/reports/process_images"
             }
 
         # read all file_names in subject_path

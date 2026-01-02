@@ -24,7 +24,7 @@ import sys
 
 
 from create.process_record import create_samples_from_record_from_wfdb, create_samples_from_record_from_split, extract_record_id
-from split.mimic_splitter import run_dataset_splitting
+from split.mimic_splitter import run_dataset_splitting, create_output_directory
 
 from preprocessing.windowing import create_windower
 from preprocessing.signal_processing import perform_signal_processing
@@ -32,7 +32,7 @@ from preprocessing.imputing import is_imputer_that_needs_split
 from preprocessing.imputing import train_and_save_imputer
 
 from validation.validation import validate_record, generate_detailed_analysis, analyze_nan_values, save_reports
-from validation import initialize_visualization
+from validation import initialize_visualization, merge_step_visualizations_for_record
 
 # Worker process initialization function
 def worker_init(log_file_path=None):
@@ -321,13 +321,14 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         records_df = load_record_list(config, logger)
 
         # initialize visualizer
+        create_output_directory(config, logger)
         records_to_visualize = initialize_visualization(records_df['record'].tolist(), config)
         
         
         
         # Process records with log file path
         max_workers = os.cpu_count() or 1  # Use all available CPU cores, fallback to 8
-        #max_workers = 1
+        # max_workers = 1
         logger.info(f"Processing {len(records_df)} records with {max_workers} workers")
 
         start_step, end_step, max_steps = get_step_for_windowing_and_split(config)
@@ -409,14 +410,15 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
         logger.info("="*60)
         
+        output_path = config.get("output", {}).get("base_dir", "outputs")
+        output_path += "/reports/process_images"
+        for record in records_to_visualize:
+            merge_step_visualizations_for_record(record, output_path=output_path)
+
         # TODO fix Save reports
         # save_reports(results, processing_time, config, output_manager, logger)
         
         logger.info("Dataset creation completed successfully")
-
-        # for me
-        output_path = config.get("output", {}).get("base_dir", "outputs")
-        output_path += "/data"
     
         #train_dict = create_dataset_pt(path=output_path, is_train=True)
         #test_dict = create_dataset_pt(path=output_path, is_train=False)

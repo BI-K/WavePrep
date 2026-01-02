@@ -103,7 +103,7 @@ def create_output_directory(config: Dict[str, Any], logger) -> Path:
     run_name = f"split_{timestamp}"
     
     base_dir = Path(config.get('output', {}).get('base_dir', 'outputs/split'))
-    output_dir = base_dir / run_name
+    output_dir = base_dir
     
     # Create directory structure from config
     output_config = config.get('output', {})
@@ -111,6 +111,10 @@ def create_output_directory(config: Dict[str, Any], logger) -> Path:
     
     for dir_name in directories:
         (output_dir / dir_name).mkdir(parents=True, exist_ok=True)
+
+    # make output directory for processing images
+    (output_dir / 'reports' / 'process_images').mkdir(parents=True, exist_ok=True)
+
     
     # Create split data subdirectories - use the actual directory name from config
     split_data_dir = None
@@ -620,6 +624,8 @@ def split_dataset(config: Dict[str, Any], logger, output_dir: Path = None) -> Di
         
         for dir_name in directories:
             (output_dir / dir_name).mkdir(parents=True, exist_ok=True)
+
+        (output_dir / 'reports' / 'process_images').mkdir(parents=True, exist_ok=True)
         
         # Create split data subdirectories
         split_data_dir_name = next((d for d in directories if 'data' in d.lower()), 'split_data')

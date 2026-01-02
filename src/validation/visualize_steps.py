@@ -3,11 +3,23 @@ from typing import List, Tuple, Any
 import numpy as np
 import random
 import math
+import os
+import threading
 
+# Set matplotlib to use non-interactive backend for multiprocessing safety
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import cv2
 
 _zoom_snippet = 60
 max_snippet_length = 1000
+image_width = 20
+image_height = 10
+
+# Lock for thread-safe file I/O in multiprocessing context
+_visualization_lock = threading.Lock()
+
     
 def initialize_visualization(list_of_all_records, config):
         # choose a random of max 10 records to visualize
@@ -201,11 +213,11 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
         return fig, fig_zoom, axes, axes_zoom
 
 
-def _visualize_all_channels_for_record(data_array, number_of_additional_subplots=0):
+def _visualize_all_channels_for_record(data_array, number_of_additional_subplots=0, image_width=image_width, image_height=image_height):
 
     channels = list(data_array.keys())
 
-    fig = plt.figure(figsize=(10, 5))
+    fig = plt.figure(figsize=(image_width, image_height / 2))
     gs = fig.add_gridspec(len(channels) + number_of_additional_subplots, hspace=0, figure=fig)
     axes = gs.subplots(sharex=True, sharey=False)
     channel_idx = 0
@@ -217,10 +229,10 @@ def _visualize_all_channels_for_record(data_array, number_of_additional_subplots
                
     return fig, axes
 
-def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, non_nan_sequences, min_required_length):
+def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, non_nan_sequences, min_required_length, output_path="outputs/img/"):
     
     data_array = processed_data_array_before[0] # onlöy first entry
-    fig, axes = _visualize_all_channels_for_record(data_array)
+    fig, axes = _visualize_all_channels_for_record(data_array, number_of_additional_subplots=0, image_width=image_width, image_height=image_height)
     channels = list(data_array.keys())
 
     if len(non_nan_sequences) == 0:
@@ -246,14 +258,14 @@ def visualize_long_nan_removal_for_record( record_id: str, step_id: int, process
             prev_end = end
 
 
-
     fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
-    fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_long_nan_removal.png")
+    with _visualization_lock:
+        fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_long_nan_removal.png")
     plt.close(fig)
 
 
 def visualize_windowing_for_record( record_id: str, step_id: int, windows, processed_data_array, observation_window,
-                prediction_horizon, prediction_window, step, expected_resolution):
+                prediction_horizon, prediction_window, step, expected_resolution, output_path="outputs/img/"):
 
     data_array = processed_data_array[0]  # only first entry
     step_size = expected_resolution * step
@@ -272,9 +284,9 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
 
         snipped_data_array = dict()
         for channel in channels:
-            snipped_data_array[channel] = data_array[channel][:zoom_levels[zoom_idx]]
+            snipped_data_array[channel] = data_array[channel][:_zoom_snippet]
         
-        fig, axes = _visualize_all_channels_for_record(snipped_data_array, number_of_additional_subplots=1)
+        fig, axes = _visualize_all_channels_for_record(snipped_data_array, number_of_additional_subplots=1, image_width=image_width / 2, image_height=image_height)
 
         # only show for a limited number of windows - e.g. 10
         for i in range(number_of_windows_to_visualize):
@@ -298,14 +310,17 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
             #axes_subplots[1].plot(windows[i]['prediction_window'], label='Prediction Window', alpha=0.7, color='red')
             
         if zoom_idx == 0:
-            fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Windowing (Full Length)", fontsize=16)
-            fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_windowing_full_length.png")
+            fig.suptitle(f"Record: {record_id} - Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
+            with _visualization_lock:
+                fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_windowing_full_length.png")
         else:
-            fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Windowing  (Zoomed In)", fontsize=16)
-            fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_windowing_zoomed.png")
+            fig.suptitle(f"Record: {record_id} - Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
+            with _visualization_lock:
+                fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_windowing_zoomed.png")
         plt.close(fig)
 
-def visualize_step_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, signal_processing_config):
+
+def visualize_step_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, signal_processing_config, output_path="outputs/img/"):
 
         if record_id and processed_data_array_before and processed_data_array_after:
 
@@ -316,8 +331,8 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
             channels_before = list(data_before.keys())
             channels_after = list(data_after.keys())
 
-            fig = plt.figure(figsize=(10, 5))
-            fig_zoom = plt.figure(figsize=(10, 5))
+            fig = plt.figure(figsize=(image_width / 2, image_height))
+            fig_zoom = plt.figure(figsize=(image_width / 2, image_height))
             gs = fig.add_gridspec(2 * len(channels_before), hspace=0, figure=fig)
             axes = gs.subplots(sharex=True, sharey=False)
             gs_zoom = fig_zoom.add_gridspec(2 * len(channels_before), hspace=0, figure=fig_zoom)
@@ -366,7 +381,7 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
 
 
             # 
-            fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization", fontsize=16)
+            fig.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
             max_len = 0
             for channel in channels_before:
                 if max(len(data_before[channel]), len(data_after[channel])) > max_len:
@@ -377,7 +392,7 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
                     ax.set_xlim(0, max_len)
                 else:
                     ax.set_xlim(-1, 1)
-            fig.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}.png")
+            fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}.png")
             plt.close(fig)
 
             max_len = 0
@@ -390,6 +405,104 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
                     ax.set_xlim(0, max_len)
                 else:
                     ax.set_xlim(-1, 1)
-            fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} Visualization (Zoomed In)", fontsize=16)
-            fig_zoom.savefig(f"outputs/img/visualization_record_{record_id}_step_{step_id}_zoomed.png")
+            fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
+            with _visualization_lock:
+                fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}.png")
+                fig_zoom.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_zoomed.png")
             plt.close(fig_zoom)
+
+
+
+def merge_step_visualizations_for_record(record_id, output_path="outputs/img/"):
+
+    # read all file-names from a path
+    
+    files = [f for f in os.listdir(output_path) if os.path.isfile(os.path.join(output_path, f))]
+    record_files = [f for f in files if f"visualization_record_{record_id}_" in f]
+
+    # sort by step id
+    record_files.sort(key=lambda x: int(x.split(".png")[0].split("_step_")[1].split("_")[0]))
+
+    visualized_steps = [x.split(".png")[0].split("_step_")[1].split("_")[0] for x in record_files]
+    visualized_steps = list(set(visualized_steps))
+    visualized_steps.sort(key=lambda x: int(x))
+
+    final_image_composition = []
+    for step in visualized_steps:
+        step_specific_files = [f for f in record_files if f"_step_{step}" in f]
+        step_specific_files_first = [f for f in step_specific_files if "long_nan_removal" not in f and "windowing" not in f]
+
+        # steps that are not long nan removal or windowing
+        # observation - prediction
+        if any("observation" in s for s in step_specific_files_first) and any("prediction" in s for s in step_specific_files_first):
+            obs_file = [s for s in step_specific_files_first if "observation" in s]
+            pred_file = [s for s in step_specific_files_first if "prediction" in s]
+            if obs_file and pred_file:
+                final_image_composition.append([obs_file[0], pred_file[0]])
+        else:
+            normal_file = [s for s in step_specific_files_first if "zoomed" not in s]
+            zoomed_file = [s for s in step_specific_files_first if "zoomed" in s]
+            if normal_file and zoomed_file:
+                final_image_composition.append([normal_file[0], zoomed_file[0]])
+            if normal_file and not zoomed_file:
+                final_image_composition.append([normal_file[0]])
+        
+        # long nan removal
+        long_nan_file = [f for f in step_specific_files if "long_nan_removal" in f]
+        if long_nan_file:
+            final_image_composition.append([long_nan_file[0]])
+
+        # windowing
+        windowing_files = [f for f in step_specific_files if "windowing" in f]
+        if windowing_files:
+            # zoomed and not zoomed
+            zoomed_file = [s for s in windowing_files if "zoomed" in s]
+            normal_file = [s for s in windowing_files if "zoomed" not in s]
+            if normal_file and zoomed_file:
+                final_image_composition.append([normal_file[0], zoomed_file[0]])
+            if normal_file and not zoomed_file:
+                final_image_composition.append([normal_file[0]])
+
+    images_to_append_vertically = []
+    for image_file_group in final_image_composition:
+        images = []
+        for image_file in image_file_group:
+            img_path = os.path.join(output_path, image_file)
+            img = cv2.imread(img_path)
+            if img is not None:
+                images.append(img)
+
+        # concatenate images horizontally
+        if images:
+            merged_img = cv2.hconcat(images)
+            images_to_append_vertically.append(merged_img)
+
+    merged_img = None
+    if images_to_append_vertically:
+        # Find the maximum width
+        max_width = max(img.shape[1] for img in images_to_append_vertically)
+        
+        # Resize all images to the same width, maintaining aspect ratio
+        resized_images = []
+        for img in images_to_append_vertically:
+            if img.shape[1] != max_width:
+                new_height = int(img.shape[0] * max_width / img.shape[1])
+                resized_img = cv2.resize(img, (max_width, new_height))
+                resized_images.append(resized_img)
+            else:
+                resized_images.append(img)
+        
+        merged_img = cv2.vconcat(resized_images)
+        
+
+    if merged_img is not None:
+        with _visualization_lock:
+            cv2.imwrite(f"{output_path}/merged_visualization_record_{record_id}.png", merged_img)
+
+    # delete all files from record_files
+    with _visualization_lock:
+        for file in record_files:
+            try:
+                os.remove(os.path.join(output_path, file))
+            except Exception as e:
+                print(f"Failed to delete {file}: {e}")
