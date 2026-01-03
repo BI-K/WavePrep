@@ -256,8 +256,8 @@ def create_dataset_pt(path: str, is_train: bool):
     folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
     
     # Parallelize folder processing using ThreadPoolExecutor (I/O-bound task)
-    # max_workers = min(os.cpu_count() or 1, len(folders))  # Don't spawn more workers than folders
-    max_workers = 1
+    max_workers = min(os.cpu_count() or 1, len(folders))  # Don't spawn more workers than folders
+    #max_workers = 1
     print(f"Processing {len(folders)} folders with {max_workers} workers")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(create_dataset_pt_process_folder, path, folder) for folder in folders]
@@ -325,8 +325,8 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         
         
         # Process records with log file path
-        # max_workers = os.cpu_count() or 1  # Use all available CPU cores, fallback to 8
-        max_workers = 1
+        max_workers = os.cpu_count() or 1  # Use all available CPU cores, fallback to 8
+        # max_workers = 1
         logger.info(f"Processing {len(records_df)} records with {max_workers} workers")
 
         start_step, end_step, max_steps = get_step_for_windowing_and_split(config)
@@ -335,36 +335,36 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         results = process_records_parallel_wfdb(records_df, config, start_step, end_step, 
                                                 max_workers, output_manager, logger, log_file_path, records_to_visualize)
         # Calculate metrics
-        #processing_time = time.time() - start_time
-        #successful_records = [r for r in results if r[1] > 0]
-        #total_samples = sum(r[1] for r in results)
+        processing_time = time.time() - start_time
+        successful_records = [r for r in results if r[1] > 0]
+        total_samples = sum(r[1] for r in results)
         
         # Log runtime in multiple formats
-        #hours = int(processing_time // 3600)
-        #minutes = int((processing_time % 3600) // 60)
-        #seconds = processing_time % 60
+        hours = int(processing_time // 3600)
+        minutes = int((processing_time % 3600) // 60)
+        seconds = processing_time % 60
         
-        #logger.info("="*60)
-        #logger.info(f"FIRST SIGNAL PROCESSING COMPLETED")
-        #logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
-        #logger.info("="*60)
+        logger.info("="*60)
+        logger.info(f"FIRST SIGNAL PROCESSING COMPLETED")
+        logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
+        logger.info("="*60)
 
         # split
         split_results = split_dataset(config, output_manager, logger)
         # Calculate metrics
-        #processing_time = time.time() - start_time
-        #successful_records = [r for r in results if r[1] > 0]
-        #total_samples = sum(r[1] for r in results)
+        processing_time = time.time() - start_time
+        successful_records = [r for r in results if r[1] > 0]
+        total_samples = sum(r[1] for r in results)
         
         # Log runtime in multiple formats
-        #hours = int(processing_time // 3600)
-        #minutes = int((processing_time % 3600) // 60)
-        #seconds = processing_time % 60
+        hours = int(processing_time // 3600)
+        minutes = int((processing_time % 3600) // 60)
+        seconds = processing_time % 60
         
-        #logger.info("="*60)
-        #logger.info(f"SPLIT COMPLETED")
-        #logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
-        #logger.info("="*60)
+        logger.info("="*60)
+        logger.info(f"SPLIT COMPLETED")
+        logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
+        logger.info("="*60)
 
         # if imputer should be trained
         if end_step < max_steps:
