@@ -213,7 +213,7 @@ def save_windows(snippets: List[dict],
             df = pd.DataFrame(channels_preds)
             filename = f"{record_id}_sample_{snippet_idx:04d}.csv"
             filepath = pred_dir / filename
-            df.to_csv(filepath)
+            df.to_csv(filepath, index = False)
             samples_saved += 1
         
         return samples_saved
@@ -444,8 +444,6 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
 
         # read all file_names in subject_path
         record_files = os.listdir(subject_path)
-        # sort by name
-        record_files.sort()
         for record_file in record_files:
             record_path = os.path.join(subject_path, record_file)
 
@@ -464,6 +462,9 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
                 signal_data = df.to_numpy()
     
                 # Preprocessing Pipeline
+                #print("start preprocessing of prediction of record ", metadata["record_id"])
+                #print(signal_data)
+
                 processed_data_array, logger_infos = perform_signal_processing(
                     filtered_data=signal_data, 
                     filtered_names=found_channels, 
@@ -476,10 +477,11 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
                     records_to_visualize=records_to_visualize
                 )        
 
+                #print("finnish preprocessing of prediction of record ", metadata["record_id"])
                 #print(processed_data_array)
                 processed_data_df = pd.DataFrame(processed_data_array[0])
                 #print(processed_data_df)
-                processed_data_df.to_csv(type_record_path.replace(".csv", "_processed.csv"), index=False)
+                processed_data_df.to_csv(type_record_path.replace(".csv", "processed.csv"), index=False)
         
     except Exception as e:
         error_msg = f"Processing error: {str(e)}"

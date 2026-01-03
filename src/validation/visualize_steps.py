@@ -12,7 +12,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import cv2
 
-_zoom_snippet = 60
+_zoom_snippet = 130
 max_snippet_length = 1000
 image_width = 20
 image_height = 10
@@ -49,6 +49,9 @@ def beautify_axes(axes, channel_idx, data_before, data_after):
     data_before_clean = data_before[~np.isnan(data_before)]
     data_after = np.array(data_after)
     data_after_clean = data_after[~np.isnan(data_after)]
+    
+    if data_after_clean.size == 0 or data_before_clean.size == 0:
+        return axes
 
     axes[channel_idx * 2].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
     axes[channel_idx * 2 + 1].set_ylim(min(np.min(data_before_clean), np.min(data_after_clean)) - 1, max(np.max(data_before_clean), np.max(data_after_clean)) + 1)
@@ -88,33 +91,34 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
     
 
         # zoomed in version - use original data for zoom since it's small
-        if len(data_before) < _zoom_snippet:
-            data_before_zoom = data_before
-            data_after_zoom = data_after
-        else:
-            data_before_zoom = data_before[:_zoom_snippet]
-            data_after_zoom = data_after[:_zoom_snippet]
-        # plot two lines one for data_before and one for data_after
-        axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Imputation', alpha=0.7, color='blue')
-        axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Imputation', alpha=0.7, color='blue', s=10, marker='x')
-        axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Imputation', alpha=0.7, color='red')
-        axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom)), data_after_zoom, label='After Imputation', alpha=0.7, color='red', s=10, marker='x')
+        if (not "prediction" in record_id) and (not "observation" in record_id):
+            if len(data_before) < _zoom_snippet:
+                data_before_zoom = data_before
+                data_after_zoom = data_after
+            else:
+                data_before_zoom = data_before[:_zoom_snippet]
+                data_after_zoom = data_after[:_zoom_snippet]
+            # plot two lines one for data_before and one for data_after
+            axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Imputation', alpha=0.7, color='blue')
+            axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Imputation', alpha=0.7, color='blue', s=10, marker='x')
+            axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Imputation', alpha=0.7, color='red')
+            axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom)), data_after_zoom, label='After Imputation', alpha=0.7, color='red', s=10, marker='x')
 
-        # background of values with nan should be highlighted
-        nan_indices_before = np.where(np.isnan(data_before_zoom))[0]
-        nan_indices_after = np.where(np.isnan(data_after_zoom))[0]
-        nan_indices_union = set(nan_indices_before).union(set(nan_indices_after))
-        filled_nan_indices = [idx for idx in nan_indices_union if idx in nan_indices_before and idx not in nan_indices_after]
-        for nan_index in filled_nan_indices:
-            axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='green', alpha=0.5)
+            # background of values with nan should be highlighted
+            nan_indices_before = np.where(np.isnan(data_before_zoom))[0]
+            nan_indices_after = np.where(np.isnan(data_after_zoom))[0]
+            nan_indices_union = set(nan_indices_before).union(set(nan_indices_after))
+            filled_nan_indices = [idx for idx in nan_indices_union if idx in nan_indices_before and idx not in nan_indices_after]
+            for nan_index in filled_nan_indices:
+                axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='green', alpha=0.5)
 
-        for nan_index in nan_indices_before:
-            axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+            for nan_index in nan_indices_before:
+                axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        for nan_index in nan_indices_after:
-            axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+            for nan_index in nan_indices_after:
+                axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
+            axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         return fig, fig_zoom, axes, axes_zoom
 
@@ -140,30 +144,31 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
 
         axes = beautify_axes(axes, channel_id, data_before, data_after)
 
-        # zoomed in version - use original data for zoom since it's small
-        if len(data_before) < _zoom_snippet:
-            data_before_zoom = data_before
-            data_after_zoom = data_after
-        else:
-            data_before_zoom = data_before[:_zoom_snippet]
-            data_after_zoom = data_after[:_zoom_snippet]
-        # plot two lines one for data_before and one for data_after
-        axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Data Cleaning', alpha=0.7, color='blue')
-        axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Data Cleaning', alpha=0.7, color='blue', s=10, marker='x')
-        axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red')
-        axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom)), data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red', s=10, marker='x')
+        if (not "prediction" in record_id) and (not "observation" in record_id):
+            # zoomed in version - use original data for zoom since it's small
+            if len(data_before) < _zoom_snippet:
+                data_before_zoom = data_before
+                data_after_zoom = data_after
+            else:
+                data_before_zoom = data_before[:_zoom_snippet]
+                data_after_zoom = data_after[:_zoom_snippet]
+            # plot two lines one for data_before and one for data_after
+            axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Data Cleaning', alpha=0.7, color='blue')
+            axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Data Cleaning', alpha=0.7, color='blue', s=10, marker='x')
+            axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red')
+            axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom)), data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red', s=10, marker='x')
 
-        # background of values with nan should be highlighted
-        nan_indices_before = np.where(np.isnan(data_before_zoom))[0]
-        for nan_index in nan_indices_before:
-            axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+            # background of values with nan should be highlighted
+            nan_indices_before = np.where(np.isnan(data_before_zoom))[0]
+            for nan_index in nan_indices_before:
+                axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        nan_indices_after = np.where(np.isnan(data_after_zoom))[0]
-        for nan_index in nan_indices_after:
-            axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
-            # axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+            nan_indices_after = np.where(np.isnan(data_after_zoom))[0]
+            for nan_index in nan_indices_after:
+                axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+                # axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
 
-        axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
+            axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         return fig, fig_zoom, axes, axes_zoom
 
@@ -172,48 +177,47 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
 
         # calculate downsampling factor based on original data
         downsampling_factor = len(data_before) // len(data_after)
-        channel_after = np.array(data_after)
+
 
         # fill up data_after to match length of data_before for visualization
         data_after_expanded = []
-        data_after_expanded_with_nans = []
+        #data_after_expanded_with_nans = [np.nan] * (downsampling_factor // 2)
         for data_point in data_after:
             data_after_expanded.extend([data_point] * downsampling_factor)
-            data_after_expanded_with_nans.extend([data_point] + [np.nan] * (downsampling_factor - 1))
+        #    data_after_expanded_with_nans.extend([data_point] + [np.nan] * (downsampling_factor -1))
 
         # plot two lines one for data_before and one for data_after
         axes[channel_id * 2].plot(data_before, label='Before Downsampling', alpha=0.7, color='blue')
         axes[channel_id * 2].scatter(range(len(data_before)), data_before, label='Before Downsampling', alpha=0.7, color='blue', s=10, marker='x')
         axes[channel_id * 2 + 1].plot(data_after_expanded, label='After Downsampling', alpha=0.7, color='red')
-        axes[channel_id * 2 + 1].scatter(range(len(data_after_expanded_with_nans)), data_after_expanded_with_nans, label='After Downsampling', alpha=0.7, color='red', s=10, marker='x')
+       # axes[channel_id * 2 + 1].scatter(range(len(data_after_expanded_with_nans)), data_after_expanded_with_nans, label='After Downsampling', alpha=0.7, color='red', s=10, marker='x')
         # add a vline every downsampling_factor
-        for i in range(0, len(data_before), downsampling_factor):
-            axes[channel_id * 2].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
-            axes[channel_id * 2 + 1].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
+        for i in range(0, len(data_before) + 1, downsampling_factor):
+            axes[channel_id * 2].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
+            axes[channel_id * 2 + 1].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
 
         axes = beautify_axes(axes, channel_id, data_before, data_after_expanded)
         
         # zoomed in version - use original data for zoom since it's small
         # zoomed in version - use original data for zoom since it's small
-        if len(data_before) < _zoom_snippet:
-            data_before_zoom = data_before
-            data_after_zoom = data_after
-        else:
-            data_before_zoom = data_before[:_zoom_snippet]
-            data_after_zoom = data_after_expanded[:_zoom_snippet]
-            data_after_zoom_with_nans = data_after_expanded_with_nans[:_zoom_snippet]
+        if (not "prediction" in record_id) and (not "observation" in record_id):
+            if len(data_before) < _zoom_snippet:
+                data_before_zoom = data_before
+                data_after_zoom = data_after
+            else:
+                data_before_zoom = data_before[:_zoom_snippet]
+                data_after_zoom = data_after_expanded[:_zoom_snippet]
 
-        # plot two lines one for data_before and one for data_after
-        axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Downsampling', alpha=0.7, color='blue')
-        axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Downsampling', alpha=0.7, color='blue', s=10, marker='x')
-        axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Downsampling', alpha=0.7, color='red')
-        axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom_with_nans)), data_after_zoom_with_nans, label='After Downsampling', alpha=0.7, color='red', s=10, marker='x')
-        # add a vline every downsampling_factor
-        for i in range(0, len(data_before), downsampling_factor):
-            axes_zoom[channel_id * 2].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
-            axes_zoom[channel_id * 2 + 1].axvline(x=i, color='gray', linestyle='-', alpha=0.3)
+            # plot two lines one for data_before and one for data_after
+            axes_zoom[channel_id * 2].plot(data_before_zoom, label='Before Downsampling', alpha=0.7, color='blue')
+            axes_zoom[channel_id * 2].scatter(range(len(data_before_zoom)), data_before_zoom, label='Before Downsampling', alpha=0.7, color='blue', s=10, marker='x')
+            axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Downsampling', alpha=0.7, color='red')
+            # add a vline every downsampling_factor
+            for i in range(0, len(data_before) + 1, downsampling_factor):
+                axes_zoom[channel_id * 2].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
+                axes_zoom[channel_id * 2 + 1].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
 
-        axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
+            axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         return fig, fig_zoom, axes, axes_zoom
 
@@ -236,21 +240,25 @@ def _visualize_all_channels_for_record(data_array, number_of_additional_subplots
 
 def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, non_nan_sequences, min_required_length, output_path="outputs/img/"):
     
-    data_array = processed_data_array_before[0] # onlöy first entry
+    # TODO add zoom level but vizualize below in merged visualization
+    data_array = processed_data_array_before[0] # only first entry
     fig, axes = _visualize_all_channels_for_record(data_array, number_of_additional_subplots=0, image_width=image_width, image_height=image_height)
     channels = list(data_array.keys())
 
+    # no sequences removed
     if len(non_nan_sequences) == 0:
         for ax in axes:
             ax.axvline(x=-0.5, color='red', linestyle='-', alpha=0.7)
             ax.axvline(x=len(data_array[channels[0]]) + 0.5, color='red', linestyle='-', alpha=0.7)
             ax.axvspan(- 0.5, len(data_array[channels[0]]) + 0.5, color='green', alpha=0.5)
+
+    # sequences were removed
     else:
         non_nan_sequences_for_data_array = non_nan_sequences[0]  # only first entry
         prev_end = 0
+
         for start, end in non_nan_sequences_for_data_array:
             for ax in axes:
-                ax.axvspan(prev_end + 0.5, start - 0.5, color='grey', alpha=0.5)
                 ax.axvline(x=start - 0.5, color='red', linestyle='-', alpha=0.7)
                 ax.axvline(x=end + 0.5, color='red', linestyle='-', alpha=0.7)
 
@@ -431,104 +439,108 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
                     ax.set_xlim(0, max_len)
                 else:
                     ax.set_xlim(-1, 1)
-            fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
-            with _visualization_lock:
-                fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}.png")
-                fig_zoom.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_zoomed.png")
+
+            if (not "observation" in record_id) and (not "prediction" in record_id):
+                fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
+                with _visualization_lock:
+                    fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}.png")
+                    fig_zoom.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_zoomed.png")
             plt.close(fig_zoom)
 
 
 
 def merge_step_visualizations_for_record(record_id, output_path="outputs/img/"):
 
-    # read all file-names from a path
-    
-    files = [f for f in os.listdir(output_path) if os.path.isfile(os.path.join(output_path, f))]
-    record_files = [f for f in files if f"visualization_record_{record_id}_" in f]
+    if (not "observation" in record_id) and (not "prediction" in record_id):
 
-    # sort by step id
-    record_files.sort(key=lambda x: int(x.split(".png")[0].split("_step_")[1].split("_")[0]))
-
-    visualized_steps = [x.split(".png")[0].split("_step_")[1].split("_")[0] for x in record_files]
-    visualized_steps = list(set(visualized_steps))
-    visualized_steps.sort(key=lambda x: int(x))
-
-    final_image_composition = []
-    for step in visualized_steps:
-        step_specific_files = [f for f in record_files if f"_step_{step}" in f]
-        step_specific_files_first = [f for f in step_specific_files if "long_nan_removal" not in f and "windowing" not in f]
-
-        # steps that are not long nan removal or windowing
-        # observation - prediction
-        if any("observation" in s for s in step_specific_files_first) and any("prediction" in s for s in step_specific_files_first):
-            obs_file = [s for s in step_specific_files_first if "observation" in s]
-            pred_file = [s for s in step_specific_files_first if "prediction" in s]
-            if obs_file and pred_file:
-                final_image_composition.append([obs_file[0], pred_file[0]])
-        else:
-            normal_file = [s for s in step_specific_files_first if "zoomed" not in s]
-            zoomed_file = [s for s in step_specific_files_first if "zoomed" in s]
-            if normal_file and zoomed_file:
-                final_image_composition.append([normal_file[0], zoomed_file[0]])
-            if normal_file and not zoomed_file:
-                final_image_composition.append([normal_file[0]])
+        # read all file-names from a path
         
-        # long nan removal
-        long_nan_file = [f for f in step_specific_files if "long_nan_removal" in f]
-        if long_nan_file:
-            final_image_composition.append([long_nan_file[0]])
+        files = [f for f in os.listdir(output_path) if os.path.isfile(os.path.join(output_path, f))]
+        record_files = [f for f in files if f"visualization_record_{record_id}_" in f]
 
-        # windowing
-        windowing_files = [f for f in step_specific_files if "windowing" in f]
-        if windowing_files:
-            # zoomed and not zoomed
-            zoomed_file = [s for s in windowing_files if "zoomed" in s]
-            normal_file = [s for s in windowing_files if "zoomed" not in s]
-            if normal_file and zoomed_file:
-                final_image_composition.append([normal_file[0], zoomed_file[0]])
-            if normal_file and not zoomed_file:
-                final_image_composition.append([normal_file[0]])
+        # sort by step id
+        record_files.sort(key=lambda x: int(x.split(".png")[0].split("_step_")[1].split("_")[0]))
 
-    images_to_append_vertically = []
-    for image_file_group in final_image_composition:
-        images = []
-        for image_file in image_file_group:
-            img_path = os.path.join(output_path, image_file)
-            img = cv2.imread(img_path)
-            if img is not None:
-                images.append(img)
+        visualized_steps = [x.split(".png")[0].split("_step_")[1].split("_")[0] for x in record_files]
+        visualized_steps = list(set(visualized_steps))
+        visualized_steps.sort(key=lambda x: int(x))
 
-        # concatenate images horizontally
-        if images:
-            merged_img = cv2.hconcat(images)
-            images_to_append_vertically.append(merged_img)
+        final_image_composition = []
+        for step in visualized_steps:
+            step_specific_files = [f for f in record_files if f"_step_{step}" in f]
+            step_specific_files_first = [f for f in step_specific_files if "long_nan_removal" not in f and "windowing" not in f]
 
-    merged_img = None
-    if images_to_append_vertically:
-        # Find the maximum width
-        max_width = max(img.shape[1] for img in images_to_append_vertically)
-        
-        # Resize all images to the same width, maintaining aspect ratio
-        resized_images = []
-        for img in images_to_append_vertically:
-            if img.shape[1] != max_width:
-                new_height = int(img.shape[0] * max_width / img.shape[1])
-                resized_img = cv2.resize(img, (max_width, new_height))
-                resized_images.append(resized_img)
+            # steps that are not long nan removal or windowing
+            # observation - prediction
+            if any("observation" in s for s in step_specific_files_first) and any("prediction" in s for s in step_specific_files_first):
+                obs_file = [s for s in step_specific_files_first if "observation" in s]
+                pred_file = [s for s in step_specific_files_first if "prediction" in s]
+                if obs_file and pred_file:
+                    final_image_composition.append([obs_file[0], pred_file[0]])
             else:
-                resized_images.append(img)
-        
-        merged_img = cv2.vconcat(resized_images)
-        
+                normal_file = [s for s in step_specific_files_first if "zoomed" not in s]
+                zoomed_file = [s for s in step_specific_files_first if "zoomed" in s]
+                if normal_file and zoomed_file:
+                    final_image_composition.append([normal_file[0], zoomed_file[0]])
+                if normal_file and not zoomed_file:
+                    final_image_composition.append([normal_file[0]])
+            
+            # long nan removal
+            long_nan_file = [f for f in step_specific_files if "long_nan_removal" in f]
+            if long_nan_file:
+                final_image_composition.append([long_nan_file[0]])
 
-    if merged_img is not None:
+            # windowing
+            windowing_files = [f for f in step_specific_files if "windowing" in f]
+            if windowing_files:
+                # zoomed and not zoomed
+                zoomed_file = [s for s in windowing_files if "zoomed" in s]
+                normal_file = [s for s in windowing_files if "zoomed" not in s]
+                if normal_file and zoomed_file:
+                    final_image_composition.append([normal_file[0], zoomed_file[0]])
+                if normal_file and not zoomed_file:
+                    final_image_composition.append([normal_file[0]])
+
+        images_to_append_vertically = []
+        for image_file_group in final_image_composition:
+            images = []
+            for image_file in image_file_group:
+                img_path = os.path.join(output_path, image_file)
+                img = cv2.imread(img_path)
+                if img is not None:
+                    images.append(img)
+
+            # concatenate images horizontally
+            if images:
+                merged_img = cv2.hconcat(images)
+                images_to_append_vertically.append(merged_img)
+
+        merged_img = None
+        if images_to_append_vertically:
+            # Find the maximum width
+            max_width = max(img.shape[1] for img in images_to_append_vertically)
+            
+            # Resize all images to the same width, maintaining aspect ratio
+            resized_images = []
+            for img in images_to_append_vertically:
+                if img.shape[1] != max_width:
+                    new_height = int(img.shape[0] * max_width / img.shape[1])
+                    resized_img = cv2.resize(img, (max_width, new_height))
+                    resized_images.append(resized_img)
+                else:
+                    resized_images.append(img)
+            
+            merged_img = cv2.vconcat(resized_images)
+            
+
+        if merged_img is not None:
+            with _visualization_lock:
+                cv2.imwrite(f"{output_path}/merged_visualization_record_{record_id}.png", merged_img)
+
+        # delete all files from record_files
         with _visualization_lock:
-            cv2.imwrite(f"{output_path}/merged_visualization_record_{record_id}.png", merged_img)
-
-    # delete all files from record_files
-    with _visualization_lock:
-        for file in record_files:
-            try:
-                os.remove(os.path.join(output_path, file))
-            except Exception as e:
-                print(f"Failed to delete {file}: {e}")
+            for file in record_files:
+                try:
+                    os.remove(os.path.join(output_path, file))
+                except Exception as e:
+                    print(f"Failed to delete {file}: {e}")

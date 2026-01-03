@@ -47,6 +47,30 @@ def clean_data(channel, lower_threshold, upper_threshold):
 
 
 
+
+def merge_intervals(intervals):
+    if not intervals:
+        return []
+
+    # 1. Sort intervals based on the start index
+    intervals.sort(key=lambda x: x[0])
+
+    merged = [intervals[0]]
+
+    for current_start, current_end in intervals[1:]:
+        last_start, last_end = merged[-1]
+
+        # 2. Check for overlap
+        # If current start is <= last interval's end, they overlap
+        if current_start <= last_end:
+            # Merge by updating the end index to the maximum found so far
+            merged[-1] = (last_start, max(last_end, current_end))
+        else:
+            # 3. No overlap, just add the interval
+            merged.append((current_start, current_end))
+
+    return merged
+
 def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_nans):
     # check consecutive nans in each channel
     # channel, start_idx, end_idx
@@ -74,12 +98,13 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
             if start_indices.size > 0 and end_indices.size > 0:
                 nan_sequences.append(zip(start_indices, end_indices))
 
-        merged_sequences = []
-
+        sequences = []
         for nan_seq in nan_sequences:
-            # merge overlapping sequences
             for start, end in sorted(nan_seq):
-                merged_sequences.append([start, end])
+                sequences.append([start, end])
+        
+        merged_sequences = merge_intervals(sequences)
+
         
         for i in range(len(merged_sequences)):
             logger_infos.append(f"Removed long NaN sequence: step={step_idx}, start={merged_sequences[i][0]}, end={merged_sequences[i][1]}")
@@ -241,20 +266,15 @@ def perform_signal_processing(
             # remove everything that does not meet the "min_record_duration" requirement
             intermediate_processed_data_array = copy.deepcopy(processed_data_array)
             processed_data_array = []
-            print("Long nan removal for record:", metadata.get("record_id", "unknown"))
-            print("len(intermediate_processed_data_array):", len(intermediate_processed_data_array))
             for i in range(len(intermediate_processed_data_array)):
                 processed_data = intermediate_processed_data_array[i]
                 total_length = len(next(iter(processed_data.values())))
-                print("Total length after long nan removal:", total_length)
-                print("Min Length", metadata.get("min_record_duration", 0) * current_fs[filtered_names[0]])
                 # TODO more elegant solution to get current fs
                 if total_length >=  current_fs[filtered_names[0]] * metadata.get("min_record_duration", 0):
                     processed_data_array.append(processed_data)
                 else:
                     logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs[filtered_names[0]]}s")
             
-            print("len(processed_data_array) after min length removal:", len(processed_data_array))
             visualize_long_nan_removal_for_record(
                 record_id=metadata.get("record_id", "unknown"),
                 step_id=step_idx,
@@ -267,7 +287,6 @@ def perform_signal_processing(
 
 
         if len(processed_data_array) == 0:
-            print(f"No processed data left after step {step_idx}, exiting processing loop.")
             step_idx = max_steps  # to exit the loop
 
     return processed_data_array, logger_infos

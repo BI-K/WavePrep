@@ -25,7 +25,7 @@ class HinrichsPaperImputer(AbstractImputer):
                         i += 1
                     end = i
                     gap = end - start
-                    channel[start:start + 3] = channel[start - 1]
+                    channel[start:start + min(gap, 3) ] = channel[start - 1]
                 else:
                     i += 1
 
