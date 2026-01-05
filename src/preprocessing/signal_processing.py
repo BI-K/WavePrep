@@ -275,15 +275,16 @@ def perform_signal_processing(
                 else:
                     logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs[filtered_names[0]]}s")
             
-            visualize_long_nan_removal_for_record(
-                record_id=metadata.get("record_id", "unknown"),
-                step_id=step_idx,
-                processed_data_array_before=processed_data_array_copy,
-                processed_data_array_after=processed_data_array,
-                non_nan_sequences=non_nan_sequences,
-                min_required_length=metadata.get("min_record_duration", 0) * current_fs[filtered_names[0]],
-                output_path=metadata.get("output_path_process_images", "outputs/reports/process_images")
-            )
+            if metadata.get("record_id") in records_to_visualize:
+                visualize_long_nan_removal_for_record(
+                    record_id=metadata.get("record_id", "unknown"),
+                    step_id=step_idx,
+                    processed_data_array_before=processed_data_array_copy,
+                    processed_data_array_after=processed_data_array,
+                    non_nan_sequences=non_nan_sequences,
+                    min_required_length=metadata.get("min_record_duration", 0) * current_fs[filtered_names[0]],
+                    output_path=metadata.get("output_path_process_images", "outputs/reports/process_images")
+                )
 
 
         if len(processed_data_array) == 0:

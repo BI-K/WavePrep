@@ -344,7 +344,8 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
                 step,
                 expected_resolution
             )
-            visualize_windowing_for_record(record_id, until_step - 1 , windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution, output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"))
+            if record_id in records_to_visualize:
+                visualize_windowing_for_record(record_id, until_step - 1 , windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution, output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"))
 
             if not windows:
                 return record_id, 0, "No valid windows created", details
@@ -481,7 +482,7 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
                 #print(processed_data_array)
                 processed_data_df = pd.DataFrame(processed_data_array[0])
                 #print(processed_data_df)
-                processed_data_df.to_csv(type_record_path.replace(".csv", "processed.csv"), index=False)
+                processed_data_df.to_csv(type_record_path, index=False)
         
     except Exception as e:
         error_msg = f"Processing error: {str(e)}"

@@ -240,7 +240,6 @@ def _visualize_all_channels_for_record(data_array, number_of_additional_subplots
 
 def visualize_long_nan_removal_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, non_nan_sequences, min_required_length, output_path="outputs/img/"):
     
-    # TODO add zoom level but vizualize below in merged visualization
     data_array = processed_data_array_before[0] # only first entry
     fig, axes = _visualize_all_channels_for_record(data_array, number_of_additional_subplots=0, image_width=image_width, image_height=image_height)
     channels = list(data_array.keys())
@@ -319,13 +318,13 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
 
         # add partial window
         if zoom_idx == 1 and number_of_windows_to_visualize > curr_number_of_windows_to_visualize and curr_number_of_windows_to_visualize * (observation_window_size + prediction_horizon_size + prediction_window_size) < zoom_levels[zoom_idx]:
-            axes[-1].hlines(y=curr_number_of_windows_to_visualize, xmin=step_size * curr_number_of_windows_to_visualize, xmax= zoom_levels[zoom_idx], color='blue', alpha=0.7)  # h line for observation window
+            axes[-1].hlines(y=curr_number_of_windows_to_visualize - 1, xmin=step_size * curr_number_of_windows_to_visualize, xmax= zoom_levels[zoom_idx], color='blue', alpha=0.7)  # h line for observation window
             axes[-1].vlines(x=step_size * curr_number_of_windows_to_visualize, ymin=curr_number_of_windows_to_visualize, ymax = curr_number_of_windows_to_visualize - 0.5, color='blue', linestyle='-', alpha=0.7)
             for ax in axes[:-1]:
                 ax.axvline(x=step_size * curr_number_of_windows_to_visualize, color='blue', linestyle='-', alpha=0.7)
 
             if zoom_levels[zoom_idx] > step_size * curr_number_of_windows_to_visualize + observation_window_size + prediction_horizon_size:
-                axes[-1].hlines(y=curr_number_of_windows_to_visualize, xmin=step_size * curr_number_of_windows_to_visualize + observation_window_size + prediction_horizon_size, xmax= zoom_levels[zoom_idx], color='red', alpha=0.7)  # h line for prediction window
+                axes[-1].hlines(y=curr_number_of_windows_to_visualize - 1, xmin=step_size * curr_number_of_windows_to_visualize + observation_window_size + prediction_horizon_size, xmax= zoom_levels[zoom_idx], color='red', alpha=0.7)  # h line for prediction window
                 axes[-1].vlines(x=step_size * curr_number_of_windows_to_visualize + observation_window_size, ymin=curr_number_of_windows_to_visualize, ymax = curr_number_of_windows_to_visualize - 0.5, color='blue', linestyle='-', alpha=0.7)
                 for ax in axes[:-1]:
                     ax.axvline(x=step_size * curr_number_of_windows_to_visualize + observation_window_size, color='blue', linestyle='-', alpha=0.7)
