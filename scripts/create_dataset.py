@@ -14,7 +14,7 @@ import logging
 # Add the src directory to the Python path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from create.procress_dataset import run_dataset_creation
+from create.process_dataset import run_dataset_creation
 
 from common import (
     create_standard_parser,

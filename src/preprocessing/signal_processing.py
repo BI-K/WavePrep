@@ -187,6 +187,7 @@ def perform_signal_processing(
     processed_data_array.append(processed_data)
 
 
+
     long_nan_removal_config_dict = {}
     for item in long_nan_removal_config or []:
         after_step = item.get("after_step")
@@ -245,6 +246,7 @@ def perform_signal_processing(
                             
                         processed_data_array[i][channel_name] = channel
 
+
         if metadata.get("record_id") in records_to_visualize:
             visualize_step_for_record(
                 record_id=metadata.get("record_id", "unknown"),
@@ -275,6 +277,7 @@ def perform_signal_processing(
                 else:
                     logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs[filtered_names[0]]}s")
             
+
             if metadata.get("record_id") in records_to_visualize:
                 visualize_long_nan_removal_for_record(
                     record_id=metadata.get("record_id", "unknown"),

@@ -23,6 +23,8 @@ def validate_record(record_path: str, config: Dict[str, Any]) -> Tuple[bool, str
         Tuple of (is_valid, error_message, metadata)
     """
     try:
+
+        print("validate record: ", record_path)
         database_name = config.get('database_name', 'mimic3wdb-matched/1.0')
         validation_config = config.get('validation', {})
         min_duration = validation_config.get('min_record_duration', 7200)
@@ -39,11 +41,14 @@ def validate_record(record_path: str, config: Dict[str, Any]) -> Tuple[bool, str
         record_name = path_parts[-1]
         
         # Read header only for efficiency
+        print("load header")
         header = wfdb.rdheader(record_name, pn_dir=directory)
+        print("header: ", header)
         
         
         # Check channels if validation enabled
         available_channels = header.sig_name
+        print("available channels: ", available_channels)
         if validate_channels and required_channels:
             missing_channels = [ch for ch in required_channels if ch not in available_channels]
             if missing_channels:

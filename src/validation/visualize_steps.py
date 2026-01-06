@@ -16,7 +16,7 @@ _zoom_snippet = 130
 max_snippet_length = 1000
 image_width = 20
 image_height = 10
-number_of_records_to_visualize = 10
+number_of_records_to_visualize = 20
 
 # Lock for thread-safe file I/O in multiprocessing context
 _visualization_lock = threading.Lock()
@@ -229,6 +229,11 @@ def _visualize_all_channels_for_record(data_array, number_of_additional_subplots
     fig = plt.figure(figsize=(image_width, image_height / 2))
     gs = fig.add_gridspec(len(channels) + number_of_additional_subplots, hspace=0, figure=fig)
     axes = gs.subplots(sharex=True, sharey=False)
+    
+    # Ensure axes is always iterable
+    if not isinstance(axes, np.ndarray):
+        axes = np.array([axes])
+    
     channel_idx = 0
     for channel in channels:
         axes[channel_idx].plot(data_array[channel], label=f'Channel: {channel}', alpha=0.7)
@@ -243,6 +248,10 @@ def visualize_long_nan_removal_for_record( record_id: str, step_id: int, process
     data_array = processed_data_array_before[0] # only first entry
     fig, axes = _visualize_all_channels_for_record(data_array, number_of_additional_subplots=0, image_width=image_width, image_height=image_height)
     channels = list(data_array.keys())
+    
+    # Ensure axes is always iterable
+    if not isinstance(axes, np.ndarray):
+        axes = np.array([axes])
 
     # no sequences removed
     if len(non_nan_sequences) == 0:
@@ -254,7 +263,6 @@ def visualize_long_nan_removal_for_record( record_id: str, step_id: int, process
     # sequences were removed
     else:
         non_nan_sequences_for_data_array = non_nan_sequences[0]  # only first entry
-        prev_end = 0
 
         for start, end in non_nan_sequences_for_data_array:
             for ax in axes:
@@ -266,9 +274,6 @@ def visualize_long_nan_removal_for_record( record_id: str, step_id: int, process
                     ax.axvspan(start - 0.5, end + 0.5, color='blue', alpha=0.5)
                 else:
                     ax.axvspan(start - 0.5, end + 0.5, color='green', alpha=0.5)
-
-            prev_end = end
-
 
     fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
     with _visualization_lock:
@@ -370,6 +375,13 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
             axes = gs.subplots(sharex=True, sharey=False)
             gs_zoom = fig_zoom.add_gridspec(2 * len(channels_before), hspace=0, figure=fig_zoom)
             axes_zoom = gs_zoom.subplots(sharex=True, sharey=False)
+            
+            # Ensure axes are always iterable
+            if not isinstance(axes, np.ndarray):
+                axes = np.array([axes])
+            if not isinstance(axes_zoom, np.ndarray):
+                axes_zoom = np.array([axes_zoom])
+            
             channel_idx = 0
             for channel in channels_before:
                 if channel not in channels_after:

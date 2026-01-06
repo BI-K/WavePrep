@@ -45,8 +45,124 @@ def extract_record_id(record_path: str) -> str:
     return record_path.split('/')[-1]
 
 
+def load_singular_record_from_wfdb(record_name: str, directory: str, offset_start_seconds: int, offset_end_seconds: int, required_channels: List[str], strict_nan_check:bool, metadata) -> Tuple[Dict, str]:
 
-def load_record_data_from_wfdb(record_path: str,  offset_start_seconds: int, offset_end_seconds: int, config: Dict[str, Any], logger) -> Tuple[Optional[np.ndarray], List[str], str]:
+    # Load the record
+    record = wfdb.rdrecord(record_name, pn_dir=directory)
+        
+    # Get available channels and find indices for required channels
+    available_channels = record.sig_name
+    channel_indices = []
+    found_channels = []
+        
+    for ch in required_channels:
+        if ch in available_channels:
+            idx = available_channels.index(ch)
+            if idx not in channel_indices:
+                channel_indices.append(idx)
+                found_channels.append(ch)
+
+    if not channel_indices:
+        return {}, f"No required channels found. Required: {required_channels}, Available: {available_channels}"
+        
+    # Extract only the required channels - this is the key fix
+    signal_data = record.p_signal[:, channel_indices]
+
+    # Apply offsets
+    if offset_start_seconds is not None and offset_end_seconds is not None:
+        start_sample = int(offset_start_seconds * record.fs)
+        end_sample = int(offset_end_seconds * record.fs)
+        signal_data = signal_data[start_sample:end_sample]
+
+    header = wfdb.rdheader(record_name, pn_dir=directory)
+
+    # Validate data
+    if signal_data is None:
+        return {}, "No signal data available in record"
+        
+    # Check for NaN values only in the required channels
+    if strict_nan_check:
+        nan_diagnostic = analyze_nan_values(signal_data, found_channels, header)
+        return {}, f"NaN values detected in required channels: {nan_diagnostic}"
+    
+
+    metadata["sampling_rate"] = header.fs
+    metadata["n_channels"] = header.n_sig,
+    metadata["available_channels"] = found_channels
+
+    result = {
+        "signal_data": signal_data,
+        "found_channels": found_channels,
+        "start_offset_seconds": 0,
+        "metadata": metadata
+    }
+    return result, ""
+
+
+def load_record_data_from_wfdb_non_numeric(record_path: str,  offset_start_seconds: int, offset_end_seconds: int, config: Dict[str, Any], logger, metadata) -> Tuple[List[Dict], str]:
+    """
+    Load signal data from a record.
+    
+    Returns:
+        Tuple of (signal_data, channel_names, error_message)
+    """
+    try:
+        database_name = config.get('database_name', 'mimic3wdb-matched/1.0')
+        validation_config = config.get('validation', {})
+        strict_nan_check = validation_config.get('strict_nan_check', True)
+        
+        # Get required channels
+        input_channels = config.get('input_channels', [])
+        output_channels = config.get('output_channels', [])
+        required_channels = list(set(input_channels + output_channels))
+        minimum_length = config.get("validation",{}).get("min_record_duration", 0)
+        
+        # Extract directory and record name
+        path_parts = record_path.split('/')
+        directory = f"{database_name}/{'/'.join(path_parts[:-1])}"
+        record_name = path_parts[-1]
+
+        header = wfdb.rdheader(record_name, pn_dir=directory)
+        segments = header.seg_name
+        cleaned_segments = [s for s in segments if s != "~"]
+
+        current_start_offset = 0
+        current_end_offset = 0
+        results = []
+        result_error_string = ""
+        for segment in cleaned_segments:
+            segment_metadata = wfdb.rdheader(record_name=segment, pn_dir=directory)
+            segment_duration_in_seconds = segment_metadata.sig_len/(segment_metadata.fs)
+
+            # stopping criteria based on user slected offsets of record
+            if current_start_offset < offset_start_seconds:
+                continue
+            if current_start_offset > offset_end_seconds:
+                continue
+
+            if all(ch in segment_metadata.sig_name for ch in required_channels) and segment_duration_in_seconds >= minimum_length:
+                # cut record segment if needed
+                if current_start_offset + segment_duration_in_seconds > offset_end_seconds:
+                    record_specific_end_offset = offset_end_seconds - current_start_offset
+                else:
+                    record_specific_end_offset = segment_duration_in_seconds
+
+                result, error_str = load_singular_record_from_wfdb(record_name = segment, directory = directory, offset_start_seconds = 0, offset_end_seconds=record_specific_end_offset,
+                                                 required_channels = required_channels, strict_nan_check = False, metadata=metadata)
+
+                results.append(result)
+                result_error_string += error_str
+
+            current_start_offset += segment_duration_in_seconds
+
+        return results, result_error_string
+        
+    except Exception as e:
+        print("Exception: ", e)
+        return [], f"Load error: {str(e)}"
+    
+
+def load_record_data_from_wfdb_numeric(record_path: str,  offset_start_seconds: int, offset_end_seconds: int, config: Dict[str, Any], logger, metadata) -> Tuple[List[Dict], str]:
     """
     Load signal data from a record.
     
@@ -68,48 +184,17 @@ def load_record_data_from_wfdb(record_path: str,  offset_start_seconds: int, off
         directory = f"{database_name}/{'/'.join(path_parts[:-1])}"
         record_name = path_parts[-1]
         
-        # Load the record
-        record = wfdb.rdrecord(record_name, pn_dir=directory)
-        
-        # Get available channels and find indices for required channels
-        available_channels = record.sig_name
-        channel_indices = []
-        found_channels = []
-        
-        for ch in required_channels:
-            if ch in available_channels:
-                idx = available_channels.index(ch)
-                if idx not in channel_indices:
-                    channel_indices.append(idx)
-                    found_channels.append(ch)
+        result, error_str = load_singular_record_from_wfdb(record_name = record_name, directory = directory, offset_start_seconds = offset_start_seconds, offset_end_seconds=offset_end_seconds,
+                                                 required_channels = required_channels, strict_nan_check = False, metadata=metadata)
 
-        if not channel_indices:
-            return None, [], f"No required channels found. Required: {required_channels}, Available: {available_channels}"
-        
-        # Extract only the required channels - this is the key fix
-        signal_data = record.p_signal[:, channel_indices]
 
-        # Apply offsets
-        if offset_start_seconds is not None and offset_end_seconds is not None:
-            start_sample = int(offset_start_seconds * record.fs)
-            end_sample = int(offset_end_seconds * record.fs)
-            signal_data = signal_data[start_sample:end_sample]
+        if error_str != "":
+            return [], error_str
 
-        header = wfdb.rdheader(record_name, pn_dir=directory)
-
-        # Validate data
-        if signal_data is None:
-            return None, [], "No signal data available in record"
-        
-        # Check for NaN values only in the required channels
-        if strict_nan_check:
-            nan_diagnostic = analyze_nan_values(signal_data, found_channels, header)
-            return None, found_channels, f"NaN values detected in required channels: {nan_diagnostic}"
-            
-        return signal_data, found_channels, ""
+        return [result], error_str
         
     except Exception as e:
-        return None, [], f"Load error: {str(e)}"
+        return [], f"Load error: {str(e)}"
 
 
 def filter_channels(data: np.ndarray, channel_names: List[str], 
@@ -260,123 +345,117 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         signal_configs = config.get('signal_processing', {})
         
         # Validate record
-        is_valid, error_msg, metadata = validate_record(record_path, config)
-        if not is_valid:
-            details.update(metadata)
-            return record_id, 0, error_msg, details
+        # is_valid, error_msg, metadata = validate_record(record_path, config)
+        #if not is_valid:
+        #    details.update(metadata)
+        #    return record_id, 0, error_msg, details
         
-        details.update(metadata)
-        metadata["min_record_duration"] = config.get('validation', {}).get('min_record_duration', 7200)
-        metadata["record_id"] = record_id
-        metadata["output_path_process_images"] = config.get("output", {}).get("base_dir","") + "/reports/process_images"
+        # details.update(metadata)
+        metadata_base = {}
+        metadata_base["min_record_duration"] = config.get('validation', {}).get('min_record_duration', 7200)
+        metadata_base["record_id"] = record_id
+        metadata_base["output_path_process_images"] = config.get("output", {}).get("base_dir","") + "/reports/process_images"
         
         # Load signal data
-        signal_data, channel_names, load_error = load_record_data_from_wfdb(record_path, offset_start_seconds, offset_end_seconds, config, logger)
-
-        # Always capture channel information if available
-        if channel_names:
-            details['channels_found'] = channel_names
-        elif 'available_channels' in details:
-            details['channels_found'] = details['available_channels']
-            
-        if load_error:
-            return record_id, 0, load_error, details
-        
-        # Filter to required channels
-        filtered_data, filtered_names = filter_channels(signal_data, channel_names, required_channels)
-        if len(filtered_data) == 0:
-            return record_id, 0, "No required channels found", details
-            
-        # Track which channels are available
-        details['input_channels_available'] = [ch for ch in input_channels if ch in filtered_names]
-        details['output_channels_available'] = [ch for ch in output_channels if ch in filtered_names]
-        
-        if not details['input_channels_available'] or not details['output_channels_available']:
-            return record_id, 0, "Missing input or output channels", details
-        
-        # Preprocessing Pipeline
-        long_nan_removal_config = config.get('long_nan_seq_removal', None)
-        processed_data_array, logger_infos = perform_signal_processing(
-            filtered_data=filtered_data, 
-            filtered_names=filtered_names, 
-            signal_processing=signal_configs, 
-            start_at_processing_step=start_at_step,
-            process_until_step=until_step,
-            long_nan_removal_config = long_nan_removal_config,
-            metadata=metadata, 
-            logger=logger,  # Pass the logger
-            records_to_visualize=records_to_visualize
-        )        
-
-        for logger_info in logger_infos:
-            logger.info(f"{logger_info} record_id={record_id}")
-
-        # Check for NaNs introduced during processing
-        #validation_config = config.get('validation', {})
-        #strict_nan_check = validation_config.get('strict_nan_check', True)
-        #if strict_nan_check:
-        #    for item_dict in processed_data_array:
-        #        for channel_name, data in item_dict.items():
-        #            if np.any(np.isnan(data)):
-        #                nan_diagnostic = analyze_nan_values(data, channel_name)
-        #                return record_id, 0, f"NaN values detected after processing in channel {channel_name}: {nan_diagnostic}", details
-        
-        if len(processed_data_array) == 0:
-            return record_id, 0, "No valid processed data after preprocessing", details
-        
-        # Create windows
-        windowing_config = config.get('windowing', {})
-        if windowing_config != {}:
-            observation_window = windowing_config.get('observation_window', 3600)
-            prediction_horizon = windowing_config.get('prediction_horizon', 300)
-            prediction_window = windowing_config.get('prediction_window', 1800)
-            step = windowing_config.get('step', 300)
-            expected_resolution = windowing_config.get('expected_resolution', 1.0)
-            windower = create_windower()
-            
-            logger.info(f"Creating windows for record {record_id}")
-
-            windows = windower.create_windows(
-                processed_data_array,
-                observation_window,
-                prediction_horizon, 
-                prediction_window,
-                step,
-                expected_resolution
-            )
-            if record_id in records_to_visualize:
-                visualize_windowing_for_record(record_id, until_step - 1 , windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution, output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"))
-
-            if not windows:
-                return record_id, 0, "No valid windows created", details
-        
-            # Check for NaNs in windows if strict checking is enabled
-            #if strict_nan_check:
-            #    windows_with_nans = []
-            #    for i, (obs_data, pred_data) in enumerate(windows):
-            #        if np.any(np.isnan(obs_data)) or np.any(np.isnan(pred_data)):
-            #            windows_with_nans.append(i)
-                
-                #if windows_with_nans:
-                #    if len(windows_with_nans) == len(windows):
-                #        # All windows have NaNs
-                #        combined_sample = np.vstack([windows[0][0], windows[0][1]])
-                #        nan_diagnostic = analyze_nan_values(combined_sample, filtered_names)
-                #        return record_id, 0, f"NaN values detected in all windows: {nan_diagnostic}", details
-                #    else:
-                #        # Some windows have NaNs
-                #        return record_id, 0, f"NaN values detected in {len(windows_with_nans)}/{len(windows)} windows", details
-                    
-            # Save windows
-            filtered_names = [channel_config["channel"] for channel_config in signal_configs]
-            samples_saved = save_windows(windows, filtered_names, record_id, subject_id, 
-                                    config, output_manager, logger, row_index)
+        if "n" in record_id:
+            signal_data_list, load_error = load_record_data_from_wfdb_numeric(record_path, offset_start_seconds, offset_end_seconds, config, logger, metadata_base)
         else:
-            samples_saved = save_uncutsamples(processed_data_array, filtered_names, record_id, subject_id,
-                                    config, output_manager, logger, row_index)
+            signal_data_list, load_error = load_record_data_from_wfdb_non_numeric(record_path, offset_start_seconds, offset_end_seconds, config, logger, metadata_base)
         
-        details['processing_time'] = time.time() - start_time
-        logger.info(f"Successfully processed record {record_id}: {samples_saved} samples created")
+        samples_saved = 0
+        for result in signal_data_list:
+            signal_data = result["signal_data"]
+            channel_names= result["found_channels"]
+            metadata = result["metadata"]
+
+            # Always capture channel information if available
+            if channel_names:
+                details['channels_found'] = channel_names
+            elif 'available_channels' in details:
+                details['channels_found'] = details['available_channels']
+                
+            if load_error:
+                return record_id, 0, load_error, details
+
+            # Filter to required channels
+            filtered_data, filtered_names = filter_channels(signal_data, channel_names, required_channels)
+            if len(filtered_data) == 0:
+                return record_id, 0, "No required channels found", details
+                
+            # Track which channels are available
+            details['input_channels_available'] = [ch for ch in input_channels if ch in filtered_names]
+            details['output_channels_available'] = [ch for ch in output_channels if ch in filtered_names]
+            
+            if not details['input_channels_available'] or not details['output_channels_available']:
+                return record_id, 0, "Missing input or output channels", details
+            
+            # Preprocessing Pipeline
+            long_nan_removal_config = config.get('long_nan_seq_removal', None)
+            processed_data_array, logger_infos = perform_signal_processing(
+                filtered_data=filtered_data, 
+                filtered_names=filtered_names, 
+                signal_processing=signal_configs, 
+                start_at_processing_step=start_at_step,
+                process_until_step=until_step,
+                long_nan_removal_config = long_nan_removal_config,
+                metadata=metadata, 
+                logger=logger,  # Pass the logger
+                records_to_visualize=records_to_visualize
+            )        
+
+            for logger_info in logger_infos:
+                logger.info(f"{logger_info} record_id={record_id}")
+
+            # Check for NaNs introduced during processing
+            #validation_config = config.get('validation', {})
+            #strict_nan_check = validation_config.get('strict_nan_check', True)
+            #if strict_nan_check:
+            #    for item_dict in processed_data_array:
+            #        for channel_name, data in item_dict.items():
+            #            if np.any(np.isnan(data)):
+            #                nan_diagnostic = analyze_nan_values(data, channel_name)
+            #                return record_id, 0, f"NaN values detected after processing in channel {channel_name}: {nan_diagnostic}", details
+            
+            if len(processed_data_array) == 0:
+                return record_id, 0, "No valid processed data after preprocessing", details
+            
+            # Create windows
+            windowing_config = config.get('windowing', {})
+            if windowing_config != {}:
+                observation_window = windowing_config.get('observation_window', 3600)
+                prediction_horizon = windowing_config.get('prediction_horizon', 300)
+                prediction_window = windowing_config.get('prediction_window', 1800)
+                step = windowing_config.get('step', 300)
+                expected_resolution = windowing_config.get('expected_resolution', 1.0)
+                windower = create_windower()
+                
+                logger.info(f"Creating windows for record {record_id}")
+
+                windows = windower.create_windows(
+                    processed_data_array,
+                    observation_window,
+                    prediction_horizon, 
+                    prediction_window,
+                    step,
+                    expected_resolution
+                )
+                if record_id in records_to_visualize:
+                    visualize_windowing_for_record(record_id, until_step - 1 , windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution, output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"))
+
+                if not windows:
+                    return record_id, 0, "No valid windows created", details
+            
+                        
+                # Save windows
+                filtered_names = [channel_config["channel"] for channel_config in signal_configs]
+                samples_saved = save_windows(windows, filtered_names, record_id, subject_id, 
+                                        config, output_manager, logger, row_index)
+            else:
+                samples_saved = save_uncutsamples(processed_data_array, filtered_names, record_id, subject_id,
+                                        config, output_manager, logger, row_index)
+            
+            details['processing_time'] = time.time() - start_time
+            logger.info(f"Successfully processed record {record_id}: {samples_saved} samples created")
         return record_id, samples_saved, "Success", details
         
     except Exception as e:
