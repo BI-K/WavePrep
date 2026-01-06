@@ -248,10 +248,9 @@ def create_dataset_pt(path: str, is_train: bool):
     labels = []
 
     if is_train:
-        path += '/train'
+        path = os.path.join(path, 'train')
     else:
-        path += '/test'
-    
+        path = os.path.join(path, 'test')
     # read all folders in the path
     folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
     
@@ -278,8 +277,8 @@ def train_imputer(config: Dict[str, Any], output_manager, logger):
     """Train and save imputer if required."""
     logger.info("Training imputer as per configuration")
 
-    output_path = config.get("output", {}).get("base_dir", "outputs")
-    output_path += "/data"
+    output_path = Path(config.get("output", {}).get("base_dir", "outputs"))
+    output_path = os.path.join(output_path, "data")
     
     train_samples = create_dataset_pt(path=output_path, is_train=True)
 
@@ -406,8 +405,8 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
         logger.info("="*60)
         
-        output_path = config.get("output", {}).get("base_dir", "outputs")
-        output_path += "/reports/process_images"
+        output_path = Path(config.get("output", {}).get("base_dir", "outputs"))
+        output_path = output_path / "reports" / "process_images"
         for record in records_to_visualize:
             merge_step_visualizations_for_record(record, output_path=output_path)
 
@@ -416,7 +415,7 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         
         logger.info("Dataset creation completed successfully")
     
-        output_path = output_path.replace("/reports/process_images","/data")
+        output_path = Path(config.get("output", {}).get("base_dir", "outputs")) / "data"
         train_dict = create_dataset_pt(path=output_path, is_train=True)
         torch.save(train_dict, os.path.join(output_path,"train_dict.pt"))
         test_dict = create_dataset_pt(path=output_path, is_train=False)

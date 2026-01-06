@@ -37,12 +37,12 @@ def get_logger(name: str = None) -> logging.Logger:
 
 def extract_subject_id(record_path: str) -> str:
     """Extract subject ID from record path."""
-    return record_path.split('/')[1]
+    return Path(record_path).parts[1]
 
 
 def extract_record_id(record_path: str) -> str:
     """Extract record ID from record path."""
-    return record_path.split('/')[-1]
+    return Path(record_path).parts[-1]
 
 
 def load_singular_record_from_wfdb(record_name: str, directory: str, offset_start_seconds: int, offset_end_seconds: int, required_channels: List[str], strict_nan_check:bool, metadata) -> Tuple[Dict, str]:
@@ -118,7 +118,7 @@ def load_record_data_from_wfdb_non_numeric(record_path: str,  offset_start_secon
         minimum_length = config.get("validation",{}).get("min_record_duration", 0)
         
         # Extract directory and record name
-        path_parts = record_path.split('/')
+        path_parts = Path(record_path).parts
         directory = f"{database_name}/{'/'.join(path_parts[:-1])}"
         record_name = path_parts[-1]
 
@@ -180,7 +180,7 @@ def load_record_data_from_wfdb_numeric(record_path: str,  offset_start_seconds: 
         required_channels = list(set(input_channels + output_channels))
         
         # Extract directory and record name
-        path_parts = record_path.split('/')
+        path_parts = Path(record_path).parts
         directory = f"{database_name}/{'/'.join(path_parts[:-1])}"
         record_name = path_parts[-1]
         
@@ -354,7 +354,7 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         metadata_base = {}
         metadata_base["min_record_duration"] = config.get('validation', {}).get('min_record_duration', 7200)
         metadata_base["record_id"] = record_id
-        metadata_base["output_path_process_images"] = config.get("output", {}).get("base_dir","") + "/reports/process_images"
+        metadata_base["output_path_process_images"] = str(Path(config.get("output", {}).get("base_dir","")) / "reports" / "process_images")
         
         # Load signal data
         if "n" in record_id:
@@ -468,8 +468,9 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
 def load_record_data_from_split(record_path: str) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[str], List[str], str]:  
     try:
         
-        observation_df = pd.from_pickle(record_path)
-        prediction_df = pd.from_pickle(record_path.replace("observation", "prediction"))
+        observation_df = pd.from_pickle(Path(record_path))
+        prediction_path = str(Path(record_path).parent.parent / "prediction" / Path(record_path).name)
+        prediction_df = pd.from_pickle(prediction_path)
 
         observation_found_channels = list(observation_df.columns)
         prediction_found_channels = list(prediction_df.columns)
@@ -506,7 +507,7 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
         
         signal_configs = config.get('signal_processing', {})
         
-        subject_path = os.path.join(split, subject, "observation")
+        subject_path = Path(split) / subject / "observation"
         long_nan_removal_config = config.get('long_nan_seq_removal', None)
 
         # TODO for now assue that current_sampling_rate is the same for all channels
@@ -518,22 +519,22 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
         metadata = {
             "min_record_duration": config.get('validation', {}).get('min_record_duration', 7200),
             "sampling_rate": current_fs[-1] if len(current_fs) > 0 else 1.0,
-            "imputer_path": config.get("output", {}).get("base_dir","") + "/data/iterative_imputer_X.pkl",
-            "output_path_process_images": config.get("output", {}).get("base_dir","") + "/reports/process_images"
+            "imputer_path": str(Path(config.get("output", {}).get("base_dir","")) / "data" / "iterative_imputer_X.pkl"),
+            "output_path_process_images": str(Path(config.get("output", {}).get("base_dir","")) / "reports" / "process_images")
             }
 
         # read all file_names in subject_path
-        record_files = os.listdir(subject_path)
+        record_files = os.listdir(str(subject_path))
         for record_file in record_files:
-            record_path = os.path.join(subject_path, record_file)
+            record_path = subject_path / record_file
 
 
-            for type_record_path in [record_path, record_path.replace("observation", "prediction")]:
+            for type_record_path in [record_path, str(Path(record_path).parent.parent / "prediction" / Path(record_path).name)]:
 
                 if "observation" in type_record_path:
-                    metadata["record_id"] = record_path.split("\\")[-1].split(".csv")[0] + "_observation"
+                    metadata["record_id"] = Path(record_path).stem + "_observation"
                 else:
-                    metadata["record_id"] = record_path.split("\\")[-1].split(".csv")[0] + "_prediction" 
+                    metadata["record_id"] = Path(record_path).stem + "_prediction" 
 
 
                 # Load signal data
@@ -563,5 +564,8 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
                 #print(processed_data_df)
                 processed_data_df.to_csv(type_record_path, index=False)
         
+        return "", 0, "Success", {}
+        
     except Exception as e:
         error_msg = f"Processing error: {str(e)}"
+        return "", 0, error_msg, {}
