@@ -1,0 +1,84 @@
+{
+    "run_type": "create", 
+    "database_name": "mimic3wdb-matched/1.0",
+    "test_mode": true,
+    "discovery_mode": "record_list",
+    "record_list_file": "inputs/test_non_numeric_waveform.csv",
+
+    "input_channels": [
+        "PLETH"
+    ],
+    "output_channels": [
+        "PLETH"
+    ],
+
+
+    "signal_processing": [
+        {"channel" : "PLETH",
+        "steps":[{
+            "step": 0,
+            "downsampling":{
+                "desired_resolution": 25,
+                "downsampling_strategy": "median"
+            },
+            "data_cleaning": {},
+            "imputation":{}
+        },
+        {
+            "step": 1,
+            "downsampling":{},
+            "data_cleaning": {
+                "lower_threshold": 0.001,
+                "upper_threshold": 3.5
+            },
+            "imputation": {}
+        }
+    ]}
+    ],
+
+    "long_nan_seq_removal": [
+        {
+            "after_step": 1,
+            "max_consecutive_nans": 15
+        }
+    ],
+
+    "windowing": {
+        "expected_resolution": 25,
+        "observation_window": 30,
+        "prediction_horizon": 0,
+        "prediction_window": 5,
+        "step": 35
+
+    },
+
+    "validation": {
+        "min_record_duration": 35,
+        "validate_channels": true,
+        "strict_nan_check": false
+    },
+
+    "splitting_method": "group_shuffle",
+    "random_seed": 42,
+
+    "train_ratio": 0.8,
+    "validation_ratio": 0.00,
+    "test_ratio": 0.20,
+
+    "min_samples_per_subject": 1,
+    "exclude_subjects": [],
+    "include_only_subjects": [],
+    "dry_run": false,
+
+    "output": {
+        "base_dir": "outputs/test_non_numeric",
+        "directory_structure": [
+            "logs",
+            "reports",
+            "data",
+            "analysis",
+            "splits"
+        ],
+        "include_metadata": true
+    }
+}
