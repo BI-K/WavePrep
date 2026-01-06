@@ -250,7 +250,7 @@
         "observation_window": 3600,
         "prediction_horizon": 0,
         "prediction_window": 300,
-        "step": 3900
+        "step": 300
     },
 
     "validation": {
