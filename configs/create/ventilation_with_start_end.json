@@ -3,13 +3,13 @@
     "database_name": "mimic3wdb-matched/1.0",
     "test_mode": true,
     "discovery_mode": "record_list",
-    "record_list_file": "inputs/ventilation_records.csv",
+    "record_list_file": "inputs/ventilation.csv",
 
     "input_channels": [
-        "CVP", "HR", "NBPSys", "NBPDias", "NBPMean", "SpO2"
+        "CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"
     ],
     "output_channels": [
-        "CVP", "HR", "NBPSys", "NBPDias", "NBPMean", "SpO2"
+        "CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"
     ],
 
     "signal_processing": [
@@ -87,7 +87,7 @@
             "imputation": {}
         }]
         },
-        {"channel" : "NBPSys",
+        {"channel" : "ABPSys",
         "steps":[
             {
             "step": 0,
@@ -125,7 +125,7 @@
             "imputation": {}
         }]
         },
-        {"channel" : "NBPDias",
+        {"channel" : "ABPDias",
         "steps":[{
             "step": 0,
             "downsampling":{
@@ -162,7 +162,7 @@
             "imputation": {}
         }]
         },
-        {"channel" : "NBPMean",
+        {"channel" : "ABPMean",
         "steps":[{
             "step": 0,
             "downsampling":{
@@ -238,8 +238,15 @@
         }
     ],
 
+    "long_nan_seq_removal": [
+        {
+            "after_step": 1,
+            "max_consecutive_nans": 15
+        }
+    ],
+
     "windowing": {
-        "expected_resolution": 0.0033333333333,
+        "expected_resolution": 0.0166666666667,
         "observation_window": 3600,
         "prediction_horizon": 0,
         "prediction_window": 300,
@@ -273,7 +280,6 @@
             "analysis",
             "splits"
         ],
-        "save_format": "csv",
         "include_metadata": false
     }
 }
