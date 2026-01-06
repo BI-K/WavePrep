@@ -524,31 +524,22 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
             }
 
         # read all file_names in subject_path
-        print("subject_path: ", subject_path)
         record_files = os.listdir(str(subject_path))
-        print(len(record_files))
         for record_file in record_files:
             record_path = subject_path / record_file
 
             for type_record_path in [str(record_path), str(Path(record_path).parent.parent / "prediction" / Path(record_path).name)]:
 
-                print(type_record_path)
-                print(record_path.stem)
-
                 if "observation" in type_record_path:
                     metadata["record_id"] = str(record_path.stem) + "_observation"
-                    print(metadata["record_id"])
                 else:
                     metadata["record_id"] = str(record_path.stem) + "_prediction" 
-                    print(metadata["record_id"])
 
 
                 # Load signal data
-                print(type_record_path)
                 df = pd.read_csv(type_record_path)
                 found_channels = df.columns
                 signal_data = df.to_numpy()
-                print("loaded data successfully")
     
                 # Preprocessing Pipeline
                 #print("start preprocessing of prediction of record ", metadata["record_id"])
