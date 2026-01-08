@@ -80,7 +80,7 @@ def main():
         print(f"Error: '{args.path}' is not a directory!")
         sys.exit(1)
 
-    # create_dataset_pt(args.path, True)
+    create_dataset_pt(args.path, True)
     # create only test file
     create_dataset_pt(args.path, False)
 
