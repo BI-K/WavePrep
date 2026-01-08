@@ -7,7 +7,7 @@ import sys
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-def create_dataset_pt_process_folder(folder_path: str, folder_name: str) -> Tuple[List, List]:
+def create_dataset_pt_process_folder(folder_path: str, folder_name: str) -> tuple[list, list]:
     """Process a single folder and return samples."""
     samples = []
     labels = []
@@ -28,7 +28,7 @@ def create_dataset_pt(path: str, is_train: bool):
     samples = []
     labels = []
 
-    dataset_name = path.split(os.path.sep)[:-1]
+    dataset_name = path.split(os.path.sep)[:-2]
 
     if is_train:
         path = os.path.join(path, 'train')
