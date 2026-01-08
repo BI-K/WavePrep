@@ -3,7 +3,7 @@
     "database_name": "mimic3wdb-matched/1.0",
     "test_mode": true,
     "discovery_mode": "record_list",
-    "record_list_file": "inputs/respiratory_surgery.csv",
+    "record_list_file": "inputs/no_respiratory_surgery.csv",
 
     "input_channels": [
         "CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"
@@ -272,7 +272,7 @@
     "dry_run": false,
 
     "output": {
-        "base_dir": "outputs/respiratory_surgery",
+        "base_dir": "outputs/no_respiratory_surgery",
         "directory_structure": [
             "logs",
             "reports",

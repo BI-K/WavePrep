@@ -414,12 +414,6 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         # save_reports(results, processing_time, config, output_manager, logger)
         
         logger.info("Dataset creation completed successfully")
-    
-        output_path = Path(config.get("output", {}).get("base_dir", "outputs")) / "data"
-        train_dict = create_dataset_pt(path=output_path, is_train=True)
-        torch.save(train_dict, os.path.join(output_path,"train_dict.pt"))
-        test_dict = create_dataset_pt(path=output_path, is_train=False)
-        torch.save(test_dict, os.path.join(output_path,"test_dict.pt"))
         
     except Exception as e:
         logger.error(f"Dataset creation failed: {e}")
