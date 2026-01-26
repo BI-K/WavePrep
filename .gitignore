@@ -2,3 +2,4 @@ outputs/*
 logs/*
 __pycache__/
 venv/
+.DS_Store
