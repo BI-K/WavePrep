@@ -14,8 +14,8 @@ import cv2
 
 _zoom_snippet = 130
 max_snippet_length = 1000
-image_width = 20
-image_height = 10
+image_width = 30
+image_height = 15
 number_of_records_to_visualize = 20
 
 # Lock for thread-safe file I/O in multiprocessing context
@@ -58,16 +58,19 @@ def beautify_axes(axes, channel_idx, data_before, data_after):
 
     return axes
 
-def _add_header(img, text, header_h, font_scale):
-    """Helper to add header to image."""
-    header_img = np.full((header_h, img.shape[1], 3), 255, dtype=np.uint8)
+def _add_text(img, text, header_h, font_scale, position="top"):
+    """Helper to add (header/footer) to image."""
+    banner_img = np.full((header_h, img.shape[1], 3), 255, dtype=np.uint8)
     font = cv2.FONT_HERSHEY_SIMPLEX
     thickness = 2
     (text_w, text_h), _ = cv2.getTextSize(text, font, font_scale, thickness)
     text_x = max(10, (img.shape[1] - text_w) // 2)
     text_y = (header_h + text_h) // 2
-    cv2.putText(header_img, text, (text_x, text_y), font, font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
-    return cv2.vconcat([header_img, img])
+    cv2.putText(banner_img, text, (text_x, text_y), font, font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
+    if position == "bottom":
+        return cv2.vconcat([img, banner_img])
+    else:
+        return cv2.vconcat([banner_img, img])
 
 # for step -> for channel -> array of cut records
 # downsampling (input_channel, output_channel) -> less data <- done :)
@@ -348,16 +351,16 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
                 if obs_start < zoom_levels[zoom_idx]:
                     ax.axvline(x=obs_start, color='blue', linestyle='-', alpha=0.7, linewidth=0.8)
                 if obs_end <= zoom_levels[zoom_idx]:
-                    ax.axvline(x=obs_end, color='blue', linestyle='--', alpha=1.0, linewidth=0.8)
+                    ax.axvline(x=obs_end, color='blue', linestyle='-', alpha=0.7, linewidth=0.8)
                 if pred_start < zoom_levels[zoom_idx]:
                     ax.axvline(x=pred_start, color='red', linestyle='-', alpha=0.7, linewidth=0.8)
                 if pred_end <= zoom_levels[zoom_idx]:
-                    ax.axvline(x=pred_end, color='red', linestyle='--', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=pred_end, color='red', linestyle='-', alpha=0.7, linewidth=0.8)
 
         # configure the window visualization subplot
         if curr_number_of_windows_to_visualize > 0:
             axes[-1].set_ylim(-0.5, curr_number_of_windows_to_visualize - 0.5)
-            axes[-1].set_ylabel('Window #')
+            axes[-1].set_ylabel('Window')
             axes[-1].invert_yaxis()  # window 0 at top
 
             #window_subplot = plt.figure(2,1)
@@ -499,6 +502,19 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
         visualized_steps = list(set(visualized_steps))
         visualized_steps.sort(key=lambda x: int(x))
 
+        expected_last_step = -1
+        for ch_cfg in signal_processing_config:
+            for s in ch_cfg.get("steps", []):
+                if isinstance(s.get("step", None), int):
+                    expected_last_step = max(expected_last_step, s["step"])
+
+        observed_steps_int = [int(s) for s in visualized_steps] if len(visualized_steps) > 0 else []
+        record_excluded = (expected_last_step >= 0 and expected_last_step not in observed_steps_int)
+
+        has_windowing = any("windowing" in f for f in record_files)
+        if not has_windowing:
+            record_excluded = True
+
         final_image_composition = []
         for step in visualized_steps:
             step_specific_files = [f for f in record_files if f"_step_{step}" in f]
@@ -575,7 +591,7 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
                         row_title += f" -> {found_type}"
                     
                     # Create and add header
-                    merged_img = _add_header(merged_img, row_title, 60, 1.0)
+                    merged_img = _add_text(merged_img, row_title, 60, 1.0)
                     
                 images_to_append_vertically.append(merged_img)
 
@@ -598,7 +614,16 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
 
         if merged_img is not None:
             super_title = f"Record: {record_id} | {start_offset_seconds}s -> {end_offset_seconds}s"
-            merged_img = _add_header(merged_img, super_title, 100, 1.2)
+            merged_img = _add_text(merged_img, super_title, 100, 1.2)
+
+            if record_excluded:
+                merged_img = _add_text(
+                    merged_img,
+                    "No data remaining for further processing.",
+                    header_h=160,
+                    font_scale=1.8,
+                    position="bottom"
+                )
 
         if merged_img is not None:
             with _visualization_lock:
