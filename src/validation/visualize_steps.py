@@ -58,6 +58,17 @@ def beautify_axes(axes, channel_idx, data_before, data_after):
 
     return axes
 
+def _add_header(img, text, header_h, font_scale):
+    """Helper to add header to image."""
+    header_img = np.full((header_h, img.shape[1], 3), 255, dtype=np.uint8)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    thickness = 2
+    (text_w, text_h), _ = cv2.getTextSize(text, font, font_scale, thickness)
+    text_x = max(10, (img.shape[1] - text_w) // 2)
+    text_y = (header_h + text_h) // 2
+    cv2.putText(header_img, text, (text_x, text_y), font, font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
+    return cv2.vconcat([header_img, img])
+
 # for step -> for channel -> array of cut records
 # downsampling (input_channel, output_channel) -> less data <- done :)
 # data cleaning (input_channel, output_channel) -> less data (more np values) <- done :)
@@ -275,7 +286,8 @@ def visualize_long_nan_removal_for_record( record_id: str, step_id: int, process
                 else:
                     ax.axvspan(start - 0.5, end + 0.5, color='green', alpha=0.5)
 
-    fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
+    # fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
+    # fig.suptitle(f"Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
     with _visualization_lock:
         fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_long_nan_removal.png")
     plt.close(fig)
@@ -348,11 +360,13 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
             #axes_subplots[1].plot(windows[i]['prediction_window'], label='Prediction Window', alpha=0.7, color='red')
             
         if zoom_idx == 0:
-            fig.suptitle(f"Record: {record_id} - Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
+            # fig.suptitle(f"Record: {record_id} - Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
+            # fig.suptitle(f"Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
             with _visualization_lock:
                 fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_windowing_full_length.png")
         else:
-            fig.suptitle(f"Record: {record_id} - Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
+            # fig.suptitle(f"Record: {record_id} - Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
+            # fig.suptitle(f"Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
             with _visualization_lock:
                 fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_windowing_zoomed.png")
         plt.close(fig)
@@ -426,7 +440,8 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
 
 
             # 
-            fig.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
+            # fig.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
+            # fig.suptitle(f"Step: {step_id} - {step_type}", fontsize=16)
             max_len = 0
             for channel in channels_before:
                 if max(len(data_before[channel]), len(data_after[channel])) > max_len:
@@ -452,7 +467,8 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
                     ax.set_xlim(-1, 1)
 
             if (not "observation" in record_id) and (not "prediction" in record_id):
-                fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
+                # fig_zoom.suptitle(f"Record: {record_id} - Step: {step_id} - {step_type}", fontsize=16)
+                # fig_zoom.suptitle(f"Step: {step_id} - {step_type}", fontsize=16)
                 with _visualization_lock:
                     fig.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}.png")
                     fig_zoom.savefig(f"{output_path}/visualization_record_{record_id}_step_{step_id}_zoomed.png")
@@ -460,7 +476,7 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
 
 
 
-def merge_step_visualizations_for_record(record_id, output_path="outputs/img/"):
+def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_offset_seconds, signal_processing_config, output_path="outputs/img/"):
 
     if (not "observation" in record_id) and (not "prediction" in record_id):
 
@@ -524,6 +540,36 @@ def merge_step_visualizations_for_record(record_id, output_path="outputs/img/"):
             # concatenate images horizontally
             if images:
                 merged_img = cv2.hconcat(images)
+
+                if len(image_file_group) > 0:
+                    first_file = image_file_group[0]
+                    current_step_id = int(first_file.split("_step_")[1].split("_")[0].split(".")[0])
+                    
+                    # Determine Title Text
+                    row_title = f"Step {current_step_id}"
+                    if "windowing" in first_file:
+                        row_title += " -> Windowing"
+                    elif "long_nan_removal" in first_file:
+                        row_title += " -> Long NaN Removal"
+                    else:
+                        # Infer type from config
+                        found_type = "Processing"
+                        for ch_cfg in signal_processing_config:
+                            steps = ch_cfg.get("steps", [])
+                            s_cfg = next((s for s in steps if s.get("step") == current_step_id), None)
+                            if s_cfg:
+                                if s_cfg.get("downsampling"):
+                                    found_type = "Downsampling"
+                                elif s_cfg.get("data_cleaning"):
+                                    found_type = "Data Cleaning"
+                                elif s_cfg.get("imputation"):
+                                    found_type = "Imputation"
+                                break
+                        row_title += f" -> {found_type}"
+                    
+                    # Create and add header
+                    merged_img = _add_header(merged_img, row_title, 60, 1.0)
+                    
                 images_to_append_vertically.append(merged_img)
 
         merged_img = None
@@ -542,7 +588,10 @@ def merge_step_visualizations_for_record(record_id, output_path="outputs/img/"):
                     resized_images.append(img)
             
             merged_img = cv2.vconcat(resized_images)
-            
+
+        if merged_img is not None:
+            super_title = f"Record: {record_id} | {start_offset_seconds}s -> {end_offset_seconds}s"
+            merged_img = _add_header(merged_img, super_title, 100, 1.2)
 
         if merged_img is not None:
             with _visualization_lock:

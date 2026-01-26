@@ -408,7 +408,15 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
         output_path = Path(config.get("output", {}).get("base_dir", "outputs"))
         output_path = output_path / "reports" / "process_images"
         for record in records_to_visualize:
-            merge_step_visualizations_for_record(record, output_path=output_path)
+            # Extract the first matching row as a Series
+            match = records_df[records_df["record"] == record].head(1)
+            signal_configs = config.get('signal_processing', {})
+
+            if not match.empty:
+                start_offset_seconds = float(match["offset_start_seconds"].iloc[0])
+                end_offset_seconds = float(match["offset_end_seconds"].iloc[0])
+                
+                merge_step_visualizations_for_record(record, start_offset_seconds, end_offset_seconds, signal_processing_config=signal_config, output_path=output_path)
 
         # TODO fix Save reports
         # save_reports(results, processing_time, config, output_manager, logger)
