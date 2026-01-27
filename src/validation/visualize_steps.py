@@ -309,8 +309,8 @@ def _add_legend(img, legend_h=260):
         "Gray vertical lines = downsampling bins.",
         "Gray shaded regions = NaN values.",
         "Teal shaded regions = imputed (filled) values.",
-        "Windowing uses distinct colors for observation / prediction.",
         "Long-NaN removal shows kept vs removed segments.",
+        "Blue shaded regions - Long-NaN = Segments removed due to insufficient duration.",
     ]
 
     for line in expl_lines:
