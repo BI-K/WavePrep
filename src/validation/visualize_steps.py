@@ -18,6 +18,11 @@ image_width = 30
 image_height = 15
 number_of_records_to_visualize = 20
 
+_window_obs_color = "#A35ACD"
+_window_pred_color = "#FF8C00"
+
+_imputation_fill_color = "#00A388"
+
 # Lock for thread-safe file I/O in multiprocessing context
 _visualization_lock = threading.Lock()
 
@@ -71,6 +76,244 @@ def _add_text(img, text, header_h, font_scale, position="top"):
         return cv2.vconcat([img, banner_img])
     else:
         return cv2.vconcat([banner_img, img])
+    
+def _hex_to_bgr_inline(hex_color):
+    hex_color = hex_color.lstrip("#")
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return (b, g, r)
+    
+def _add_legend(img, legend_h=260):
+    """
+    Append a clean legend banner at the bottom of a merged visualization image.
+    Uses OpenCV only (keeps merge step self-contained).
+    """
+    w = img.shape[1]
+
+    # scale legend visuals for very wide merged images
+    # (keeps text readable when w is large)
+    scale = max(1.0, min(1.8, w / 1600.0))
+
+    legend = np.full((legend_h, w, 3), 255, dtype=np.uint8)
+
+    # subtle top separator
+    cv2.line(legend, (0, 0), (w, 0), (220, 220, 220), 2)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    thickness = max(2, int(round(2 * scale)))
+
+    pad_x = int(round(30 * scale))
+    pad_y = int(round(18 * scale))
+
+    title_scale = 0.95 * scale
+    label_scale = 0.80 * scale
+    expl_scale = 0.75 * scale
+
+    # Title
+    cv2.putText(
+        legend,
+        "Legend",
+        (pad_x, pad_y + int(round(22 * scale))),
+        font,
+        title_scale,
+        (0, 0, 0),
+        thickness,
+        cv2.LINE_AA
+    )
+
+    # BGR colors for OpenCV drawing
+    blue = (255, 0, 0)
+    red = (0, 0, 255)
+    gray = (155, 155, 155)
+
+    window_obs_bgr = _hex_to_bgr_inline(_window_obs_color)
+    window_pred_bgr = _hex_to_bgr_inline(_window_pred_color)
+    imputed_bgr = _hex_to_bgr_inline(_imputation_fill_color)
+
+    # layout (scaled)
+    icon_w = int(round(118 * scale))
+    icon_h = int(round(46 * scale))
+    gap = int(round(14 * scale))
+    item_gap = int(round(28 * scale))
+    row_gap = int(round(18 * scale))
+
+    x = pad_x
+    y = pad_y + int(round(44 * scale))
+
+    items = [
+        ("before", "Before step"),
+        ("after", "After step"),
+        ("downsampling", "Downsampling bins"),
+        ("nan", "NaN values"),
+        ("imputed", "Imputed values"),
+        ("windowing", "Windowing (obs / pred)"),
+        ("long_nan", "Long-NaN removal (kept / removed)"),
+    ]
+
+    for kind, label in items:
+        (text_w, _), _ = cv2.getTextSize(label, font, label_scale, thickness)
+        needed_w = icon_w + gap + text_w + item_gap
+
+        # wrap row if needed
+        if x + needed_w > w - pad_x:
+            x = pad_x
+            y += icon_h + row_gap
+
+        # extend banner if needed (robust for narrow images)
+        if y + icon_h + int(round(14 * scale)) > legend.shape[0]:
+            extra_h = (y + icon_h + int(round(14 * scale))) - legend.shape[0]
+            legend = cv2.copyMakeBorder(
+                legend, 0, extra_h, 0, 0,
+                borderType=cv2.BORDER_CONSTANT,
+                value=(255, 255, 255)
+            )
+
+        # icon frame
+        cv2.rectangle(legend, (x, y), (x + icon_w, y + icon_h), (245, 245, 245), -1)
+        cv2.rectangle(legend, (x, y), (x + icon_w, y + icon_h), (225, 225, 225), 1)
+
+        cy = y + icon_h // 2
+
+        # draw icon content
+        if kind == "before":
+            x1 = x + int(round(0.12 * icon_w))
+            x2 = x + int(round(0.88 * icon_w))
+            cv2.line(legend, (x1, cy), (x2, cy), blue, max(2, int(round(3 * scale))))
+            for fx in (0.25, 0.50, 0.75):
+                px = x + int(round(fx * icon_w))
+                d = int(round(0.10 * icon_h))
+                cv2.line(legend, (px - d, cy - d), (px + d, cy + d), blue, max(1, int(round(2 * scale))))
+                cv2.line(legend, (px - d, cy + d), (px + d, cy - d), blue, max(1, int(round(2 * scale))))
+
+        elif kind == "after":
+            x1 = x + int(round(0.12 * icon_w))
+            x2 = x + int(round(0.88 * icon_w))
+            cv2.line(legend, (x1, cy), (x2, cy), red, max(2, int(round(3 * scale))))
+            # hint that markers may exist
+            px = x + icon_w // 2
+            d = int(round(0.09 * icon_h))
+            cv2.line(legend, (px - d, cy - d), (px + d, cy + d), red, 1)
+            cv2.line(legend, (px - d, cy + d), (px + d, cy - d), red, 1)
+
+        elif kind == "downsampling":
+            for fx in (0.30, 0.50, 0.70):
+                px = x + int(round(fx * icon_w))
+                cv2.line(
+                    legend,
+                    (px, y + int(round(0.15 * icon_h))),
+                    (px, y + icon_h - int(round(0.15 * icon_h))),
+                    gray,
+                    max(1, int(round(2 * scale)))
+                )
+
+        elif kind == "nan":
+            rx1 = x + int(round(0.23 * icon_w))
+            rx2 = x + int(round(0.77 * icon_w))
+            ry1 = y + int(round(0.18 * icon_h))
+            ry2 = y + icon_h - int(round(0.18 * icon_h))
+            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), (190, 190, 190), -1)
+            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), (160, 160, 160), 1)
+
+        elif kind == "imputed":
+            # thin band like axvspan (teal)
+            rx1 = x + int(round(0.44 * icon_w))
+            rx2 = x + int(round(0.56 * icon_w))
+            ry1 = y + int(round(0.15 * icon_h))
+            ry2 = y + icon_h - int(round(0.15 * icon_h))
+            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), imputed_bgr, -1)
+            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), (120, 120, 120), 1)
+
+        elif kind == "windowing":
+            rx1 = x + int(round(0.14 * icon_w))
+            rx2 = x + int(round(0.86 * icon_w))
+
+            top1 = y + int(round(0.22 * icon_h))
+            top2 = y + int(round(0.38 * icon_h))
+            bot1 = y + int(round(0.55 * icon_h))
+            bot2 = y + int(round(0.71 * icon_h))
+
+            cv2.rectangle(legend, (rx1, top1), (rx2, top2), window_obs_bgr, -1)
+            cv2.rectangle(legend, (rx1, bot1), (rx2, bot2), window_pred_bgr, -1)
+
+            for fx in (0.30, 0.70):
+                px = x + int(round(fx * icon_w))
+                cv2.line(
+                    legend,
+                    (px, y + int(round(0.15 * icon_h))),
+                    (px, y + icon_h - int(round(0.15 * icon_h))),
+                    (210, 210, 210),
+                    1
+                )
+
+        elif kind == "long_nan":
+            # kept segment (green band) with red boundaries
+            kx1 = x + int(round(0.14 * icon_w))
+            kx2 = x + int(round(0.86 * icon_w))
+            ky1 = y + int(round(0.18 * icon_h))
+            ky2 = y + int(round(0.36 * icon_h))
+            cv2.rectangle(legend, (kx1, ky1), (kx2, ky2), (120, 230, 120), -1)
+            cv2.line(legend, (kx1, ky1 - 1), (kx1, ky2 + 1), red, max(1, int(round(2 * scale))))
+            cv2.line(legend, (kx2, ky1 - 1), (kx2, ky2 + 1), red, max(1, int(round(2 * scale))))
+
+            # removed segment (light blue band) with red boundaries
+            rx1 = x + int(round(0.26 * icon_w))
+            rx2 = x + int(round(0.74 * icon_w))
+            ry1 = y + int(round(0.56 * icon_h))
+            ry2 = y + int(round(0.74 * icon_h))
+            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), (210, 210, 255), -1)
+            cv2.line(legend, (rx1, ry1 - 1), (rx1, ry2 + 1), red, max(1, int(round(2 * scale))))
+            cv2.line(legend, (rx2, ry1 - 1), (rx2, ry2 + 1), red, max(1, int(round(2 * scale))))
+
+        # label
+        cv2.putText(
+            legend,
+            label,
+            (x + icon_w + gap, y + icon_h - int(round(12 * scale))),
+            font,
+            label_scale,
+            (20, 20, 20),
+            thickness,
+            cv2.LINE_AA
+        )
+
+        x += needed_w
+
+    # explanation block (compact, but explicit)
+    expl_y = y + icon_h + int(round(26 * scale))
+    expl_lines = [
+        "How to read:",
+        "Blue line + x markers = data before the step.",
+        "Red line (with/without x) = data after the step.",
+        "Gray vertical lines = downsampling bins.",
+        "Gray shaded regions = NaN values.",
+        "Teal shaded regions = imputed (filled) values.",
+        "Windowing uses distinct colors for observation / prediction.",
+        "Long-NaN removal shows kept vs removed segments.",
+    ]
+
+    for line in expl_lines:
+        if expl_y + int(round(24 * scale)) > legend.shape[0]:
+            extra_h = (expl_y + int(round(24 * scale))) - legend.shape[0]
+            legend = cv2.copyMakeBorder(
+                legend, 0, extra_h, 0, 0,
+                borderType=cv2.BORDER_CONSTANT,
+                value=(255, 255, 255)
+            )
+
+        cv2.putText(
+            legend,
+            line,
+            (pad_x, expl_y),
+            font,
+            expl_scale,
+            (40, 40, 40),
+            max(1, int(round(2 * scale))),
+            cv2.LINE_AA
+        )
+        expl_y += int(round(26 * scale))
+
+    return cv2.vconcat([img, legend])
 
 # for step -> for channel -> array of cut records
 # downsampling (input_channel, output_channel) -> less data <- done :)
@@ -93,7 +336,7 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
         
 
         for nan_index in filled_nan_indices:
-            axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='green', alpha=0.5)
+            axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color=_imputation_fill_color, alpha=0.5)
 
         for nan_index in nan_indices_before:
             axes[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
@@ -124,7 +367,7 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
             nan_indices_union = set(nan_indices_before).union(set(nan_indices_after))
             filled_nan_indices = [idx for idx in nan_indices_union if idx in nan_indices_before and idx not in nan_indices_after]
             for nan_index in filled_nan_indices:
-                axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='green', alpha=0.5)
+                axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color=_imputation_fill_color, alpha=0.5)
 
             for nan_index in nan_indices_before:
                 axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
@@ -340,22 +583,22 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
 
             # observation window - ONLY horizontal bars, NO vertical lines on axes[-1]
             if obs_start < zoom_levels[zoom_idx]:
-                axes[-1].hlines(y=i, xmin=obs_start, xmax=obs_end_clip, color='blue', linewidth=3, alpha=0.7)
+                axes[-1].hlines(y=i, xmin=obs_start, xmax=obs_end_clip, color=_window_obs_color, linewidth=3, alpha=0.7)
 
             # prediction window - ONLY horizontal bars, NO vertical lines on axes[-1]
             if pred_start < zoom_levels[zoom_idx]:
-                axes[-1].hlines(y=i, xmin=pred_start, xmax=pred_end_clip, color='red', linewidth=3, alpha=0.7)
+                axes[-1].hlines(y=i, xmin=pred_start, xmax=pred_end_clip, color=_window_pred_color, linewidth=3, alpha=0.7)
 
             # vertical lines ONLY on channel subplots (axes[:-1])
             for ax in axes[:-1]:
                 if obs_start < zoom_levels[zoom_idx]:
-                    ax.axvline(x=obs_start, color='blue', linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=obs_start, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
                 if obs_end <= zoom_levels[zoom_idx]:
-                    ax.axvline(x=obs_end, color='blue', linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=obs_end, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
                 if pred_start < zoom_levels[zoom_idx]:
-                    ax.axvline(x=pred_start, color='red', linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=pred_start, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
                 if pred_end <= zoom_levels[zoom_idx]:
-                    ax.axvline(x=pred_end, color='red', linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=pred_end, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
 
         # configure the window visualization subplot
         if curr_number_of_windows_to_visualize > 0:
@@ -591,7 +834,7 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
                         row_title += f" -> {found_type}"
                     
                     # Create and add header
-                    merged_img = _add_text(merged_img, row_title, 60, 1.0)
+                    merged_img = _add_text(merged_img, row_title, 80, 1.5)
                     
                 images_to_append_vertically.append(merged_img)
 
@@ -614,7 +857,7 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
 
         if merged_img is not None:
             super_title = f"Record: {record_id} | {start_offset_seconds}s -> {end_offset_seconds}s"
-            merged_img = _add_text(merged_img, super_title, 100, 1.2)
+            merged_img = _add_text(merged_img, super_title, 160, 1.8)
 
             if record_excluded:
                 merged_img = _add_text(
@@ -624,6 +867,8 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
                     font_scale=1.8,
                     position="bottom"
                 )
+
+            merged_img = _add_legend(merged_img)
 
         if merged_img is not None:
             with _visualization_lock:
