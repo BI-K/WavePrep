@@ -107,8 +107,7 @@ def _hex_to_bgr_inline(hex_color):
     
 def _add_legend(img, legend_h=260):
     """
-    Append a clean legend banner at the bottom of a merged visualization image.
-    Uses OpenCV only (keeps merge step self-contained).
+    Append a legend banner at the bottom of a merged visualization image.
     """
     w = img.shape[1]
 
@@ -168,11 +167,25 @@ def _add_legend(img, legend_h=260):
         ("downsampling", "Downsampling bins"),
         ("nan", "NaN values"),
         ("imputed", "Imputed values"),
-        ("windowing", "Windowing (obs / pred)"),
-        ("long_nan", "Long-NaN removal (kept / removed)"),
+
+        ("row_break", ""),
+
+        ("window_obs", "Observation window"),
+        ("window_pred", "Prediction window"),
+
+        ("row_break", ""),
+
+        ("long_nan_keep", "Included"),
+        ("long_nan_excl_long", "Excluded (long NaN)"),
+        ("long_nan_excl_short", "Excluded (too short)"),
     ]
 
     for kind, label in items:
+        if kind == "row_break":
+            x = pad_x
+            y += icon_h + row_gap
+            continue
+
         (text_w, _), _ = cv2.getTextSize(label, font, label_scale, thickness)
         needed_w = icon_w + gap + text_w + item_gap
 
@@ -238,53 +251,64 @@ def _add_legend(img, legend_h=260):
 
         elif kind == "imputed":
             # thin band like axvspan (teal)
-            rx1 = x + int(round(0.44 * icon_w))
-            rx2 = x + int(round(0.56 * icon_w))
-            ry1 = y + int(round(0.15 * icon_h))
-            ry2 = y + icon_h - int(round(0.15 * icon_h))
+            rx1 = x + int(round(0.23 * icon_w))
+            rx2 = x + int(round(0.77 * icon_w))
+            ry1 = y + int(round(0.18 * icon_h))
+            ry2 = y + icon_h - int(round(0.18 * icon_h))
             cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), imputed_bgr, -1)
             cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), (120, 120, 120), 1)
 
-        elif kind == "windowing":
+        elif kind == "window_obs":
+            # single band (observation)
             rx1 = x + int(round(0.14 * icon_w))
             rx2 = x + int(round(0.86 * icon_w))
+            ry1 = y + int(round(0.38 * icon_h))
+            ry2 = y + int(round(0.62 * icon_h))
+            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), window_obs_bgr, -1)
+            # end caps for clarity
+            cv2.line(legend, (rx1, ry1), (rx1, ry2), (120, 120, 120), 1)
+            cv2.line(legend, (rx2, ry1), (rx2, ry2), (120, 120, 120), 1)
 
-            top1 = y + int(round(0.22 * icon_h))
-            top2 = y + int(round(0.38 * icon_h))
-            bot1 = y + int(round(0.55 * icon_h))
-            bot2 = y + int(round(0.71 * icon_h))
+        elif kind == "window_pred":
+            # single band (prediction)
+            rx1 = x + int(round(0.14 * icon_w))
+            rx2 = x + int(round(0.86 * icon_w))
+            ry1 = y + int(round(0.38 * icon_h))
+            ry2 = y + int(round(0.62 * icon_h))
+            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), window_pred_bgr, -1)
+            cv2.line(legend, (rx1, ry1), (rx1, ry2), (120, 120, 120), 1)
+            cv2.line(legend, (rx2, ry1), (rx2, ry2), (120, 120, 120), 1)
 
-            cv2.rectangle(legend, (rx1, top1), (rx2, top2), window_obs_bgr, -1)
-            cv2.rectangle(legend, (rx1, bot1), (rx2, bot2), window_pred_bgr, -1)
+        elif kind == "long_nan_keep":
+            # red bounds + green fill
+            sx1 = x + int(round(0.20 * icon_w))
+            sx2 = x + int(round(0.80 * icon_w))
+            sy1 = y + int(round(0.30 * icon_h))
+            sy2 = y + int(round(0.70 * icon_h))
+            cv2.rectangle(legend, (sx1, sy1), (sx2, sy2), (120, 230, 120), -1)
+            cv2.line(legend, (sx1, sy1 - 1), (sx1, sy2 + 1), red, max(1, int(round(2 * scale))))
+            cv2.line(legend, (sx2, sy1 - 1), (sx2, sy2 + 1), red, max(1, int(round(2 * scale))))
 
-            for fx in (0.30, 0.70):
-                px = x + int(round(fx * icon_w))
-                cv2.line(
-                    legend,
-                    (px, y + int(round(0.15 * icon_h))),
-                    (px, y + icon_h - int(round(0.15 * icon_h))),
-                    (210, 210, 210),
-                    1
-                )
+        elif kind == "long_nan_excl_long":
+            # red bounds + white fill (i.e., no fill), but add a subtle inner outline so it's visible
+            sx1 = x + int(round(0.20 * icon_w))
+            sx2 = x + int(round(0.80 * icon_w))
+            sy1 = y + int(round(0.30 * icon_h))
+            sy2 = y + int(round(0.70 * icon_h))
+            cv2.rectangle(legend, (sx1, sy1), (sx2, sy2), (255, 255, 255), -1)
+            cv2.rectangle(legend, (sx1, sy1), (sx2, sy2), (210, 210, 210), 1)
+            cv2.line(legend, (sx1, sy1 - 1), (sx1, sy2 + 1), red, max(1, int(round(2 * scale))))
+            cv2.line(legend, (sx2, sy1 - 1), (sx2, sy2 + 1), red, max(1, int(round(2 * scale))))
 
-        elif kind == "long_nan":
-            # kept segment (green band) with red boundaries
-            kx1 = x + int(round(0.14 * icon_w))
-            kx2 = x + int(round(0.86 * icon_w))
-            ky1 = y + int(round(0.18 * icon_h))
-            ky2 = y + int(round(0.36 * icon_h))
-            cv2.rectangle(legend, (kx1, ky1), (kx2, ky2), (120, 230, 120), -1)
-            cv2.line(legend, (kx1, ky1 - 1), (kx1, ky2 + 1), red, max(1, int(round(2 * scale))))
-            cv2.line(legend, (kx2, ky1 - 1), (kx2, ky2 + 1), red, max(1, int(round(2 * scale))))
-
-            # removed segment (light blue band) with red boundaries
-            rx1 = x + int(round(0.26 * icon_w))
-            rx2 = x + int(round(0.74 * icon_w))
-            ry1 = y + int(round(0.56 * icon_h))
-            ry2 = y + int(round(0.74 * icon_h))
-            cv2.rectangle(legend, (rx1, ry1), (rx2, ry2), (210, 210, 255), -1)
-            cv2.line(legend, (rx1, ry1 - 1), (rx1, ry2 + 1), red, max(1, int(round(2 * scale))))
-            cv2.line(legend, (rx2, ry1 - 1), (rx2, ry2 + 1), red, max(1, int(round(2 * scale))))
+        elif kind == "long_nan_excl_short":
+            # red bounds + light-blue fill (too short)
+            sx1 = x + int(round(0.20 * icon_w))
+            sx2 = x + int(round(0.80 * icon_w))
+            sy1 = y + int(round(0.30 * icon_h))
+            sy2 = y + int(round(0.70 * icon_h))
+            cv2.rectangle(legend, (sx1, sy1), (sx2, sy2), (255, 0, 0), -1)  # light blue (BGR)
+            cv2.line(legend, (sx1, sy1 - 1), (sx1, sy2 + 1), red, max(1, int(round(2 * scale))))
+            cv2.line(legend, (sx2, sy1 - 1), (sx2, sy2 + 1), red, max(1, int(round(2 * scale))))
 
         # label
         cv2.putText(
@@ -299,40 +323,6 @@ def _add_legend(img, legend_h=260):
         )
 
         x += needed_w
-
-    # explanation block (compact, but explicit)
-    expl_y = y + icon_h + int(round(26 * scale))
-    expl_lines = [
-        "How to read:",
-        "Blue line + x markers = data before the step.",
-        "Red line (with/without x) = data after the step.",
-        "Gray vertical lines = downsampling bins.",
-        "Gray shaded regions = NaN values.",
-        "Teal shaded regions = imputed (filled) values.",
-        "Long-NaN removal shows kept vs removed segments.",
-        "Blue shaded regions - Long-NaN = Segments removed due to insufficient duration.",
-    ]
-
-    for line in expl_lines:
-        if expl_y + int(round(24 * scale)) > legend.shape[0]:
-            extra_h = (expl_y + int(round(24 * scale))) - legend.shape[0]
-            legend = cv2.copyMakeBorder(
-                legend, 0, extra_h, 0, 0,
-                borderType=cv2.BORDER_CONSTANT,
-                value=(255, 255, 255)
-            )
-
-        cv2.putText(
-            legend,
-            line,
-            (pad_x, expl_y),
-            font,
-            expl_scale,
-            (40, 40, 40),
-            max(1, int(round(2 * scale))),
-            cv2.LINE_AA
-        )
-        expl_y += int(round(26 * scale))
 
     return cv2.vconcat([img, legend])
 
@@ -602,12 +592,22 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
             for ax in axes[:-1]:
                 if obs_start < zoom_levels[zoom_idx]:
                     ax.axvline(x=obs_start, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
-                if obs_end <= zoom_levels[zoom_idx]:
+                if obs_end_clip <= zoom_levels[zoom_idx]:
                     ax.axvline(x=obs_end, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
                 if pred_start < zoom_levels[zoom_idx]:
                     ax.axvline(x=pred_start, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
-                if pred_end <= zoom_levels[zoom_idx]:
+                if pred_end_clip <= zoom_levels[zoom_idx]:
                     ax.axvline(x=pred_end, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
+
+            y_top = -0.5
+            if obs_start < zoom_levels[zoom_idx]:
+                axes[-1].vlines(obs_start, y_top, i, color=_window_obs_color, alpha=0.7, linewidth=0.8)
+            if obs_end_clip <= zoom_levels[zoom_idx]:
+                axes[-1].vlines(obs_end_clip, y_top, i, color=_window_obs_color, alpha=0.7, linewidth=0.8)
+            if pred_start < zoom_levels[zoom_idx]:
+                axes[-1].vlines(pred_start, y_top, i, color=_window_pred_color, alpha=0.7, linewidth=0.8)
+            if pred_end_clip <= zoom_levels[zoom_idx]:
+                axes[-1].vlines(pred_end_clip, y_top, i, color=_window_pred_color, alpha=0.7, linewidth=0.8)
 
         # configure the window visualization subplot
         if curr_number_of_windows_to_visualize > 0:
