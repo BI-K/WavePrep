@@ -77,6 +77,27 @@ def _add_text(img, text, header_h, font_scale, position="top"):
     else:
         return cv2.vconcat([banner_img, img])
     
+def _highlight_nan_background(ax, data, color='grey', alpha=0.5):
+    data = np.asarray(data)
+    if data.size == 0:
+        return
+
+    nan_mask = np.isnan(data)
+    if not np.any(nan_mask):
+        return
+
+    nan_idx = np.where(nan_mask)[0]
+    start = nan_idx[0]
+    prev = nan_idx[0]
+
+    for idx in nan_idx[1:]:
+        if idx != prev + 1:
+            ax.axvspan(start - 0.5, prev + 0.5, color=color, alpha=alpha, linewidth=0)
+            start = idx
+        prev = idx
+
+    ax.axvspan(start - 0.5, prev + 0.5, color=color, alpha=alpha, linewidth=0)
+    
 def _hex_to_bgr_inline(hex_color):
     hex_color = hex_color.lstrip("#")
     r = int(hex_color[0:2], 16)
@@ -338,11 +359,8 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
         for nan_index in filled_nan_indices:
             axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color=_imputation_fill_color, alpha=0.5)
 
-        for nan_index in nan_indices_before:
-            axes[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
-
-        for nan_index in nan_indices_after:
-            axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+        _highlight_nan_background(axes[channel_id * 2], data_before)
+        _highlight_nan_background(axes[channel_id * 2 + 1], data_after)
 
         axes = beautify_axes(axes, channel_id, data_before, data_after)
     
@@ -366,14 +384,12 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
             nan_indices_after = np.where(np.isnan(data_after_zoom))[0]
             nan_indices_union = set(nan_indices_before).union(set(nan_indices_after))
             filled_nan_indices = [idx for idx in nan_indices_union if idx in nan_indices_before and idx not in nan_indices_after]
+            
             for nan_index in filled_nan_indices:
                 axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color=_imputation_fill_color, alpha=0.5)
 
-            for nan_index in nan_indices_before:
-                axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
-
-            for nan_index in nan_indices_after:
-                axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+            _highlight_nan_background(axes_zoom[channel_id * 2], data_before_zoom)
+            _highlight_nan_background(axes_zoom[channel_id * 2 + 1], data_after_zoom)
 
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
@@ -389,15 +405,8 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
         axes[channel_id * 2 + 1].plot(data_after, label='After Data Cleaning', alpha=0.7, color='red')
         axes[channel_id * 2 + 1].scatter(range(len(data_after)), data_after, label='After Data Cleaning', alpha=0.7, color='red', s=10, marker='x')
 
-        # background of values with nan should be highlighted
-        nan_indices_before = np.where(np.isnan(data_before))[0]
-        for nan_index in nan_indices_before:
-            axes[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
-
-        nan_indices_after = np.where(np.isnan(data_after))[0]
-        for nan_index in nan_indices_after:
-            axes[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
-            # axes[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+        _highlight_nan_background(axes[channel_id * 2], data_before)
+        _highlight_nan_background(axes[channel_id * 2 + 1], data_after)
 
         axes = beautify_axes(axes, channel_id, data_before, data_after)
 
@@ -415,15 +424,8 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
             axes_zoom[channel_id * 2 + 1].plot(data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red')
             axes_zoom[channel_id * 2 + 1].scatter(range(len(data_after_zoom)), data_after_zoom, label='After Data Cleaning', alpha=0.7, color='red', s=10, marker='x')
 
-            # background of values with nan should be highlighted
-            nan_indices_before = np.where(np.isnan(data_before_zoom))[0]
-            for nan_index in nan_indices_before:
-                axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
-
-            nan_indices_after = np.where(np.isnan(data_after_zoom))[0]
-            for nan_index in nan_indices_after:
-                axes_zoom[channel_id * 2 + 1].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
-                # axes_zoom[channel_id * 2].axvspan(nan_index - 0.5, nan_index + 0.5, color='grey', alpha=0.5)
+            _highlight_nan_background(axes_zoom[channel_id * 2], data_before_zoom)
+            _highlight_nan_background(axes_zoom[channel_id * 2 + 1], data_after_zoom)
 
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
@@ -452,6 +454,9 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
         for i in range(0, len(data_before) + 1, downsampling_factor):
             axes[channel_id * 2].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
             axes[channel_id * 2 + 1].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
+        
+        _highlight_nan_background(axes[channel_id * 2], data_before)
+        _highlight_nan_background(axes[channel_id * 2 + 1], data_after_expanded)
 
         axes = beautify_axes(axes, channel_id, data_before, data_after_expanded)
         
@@ -474,6 +479,9 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
                 axes_zoom[channel_id * 2].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
                 axes_zoom[channel_id * 2 + 1].axvline(x=i - 0.5, color='gray', linestyle='-', alpha=0.5)
 
+            _highlight_nan_background(axes_zoom[channel_id * 2], data_before_zoom)
+            _highlight_nan_background(axes_zoom[channel_id * 2 + 1], data_after_zoom)
+
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         return fig, fig_zoom, axes, axes_zoom
@@ -495,6 +503,7 @@ def _visualize_all_channels_for_record(data_array, number_of_additional_subplots
     for channel in channels:
         axes[channel_idx].plot(data_array[channel], label=f'Channel: {channel}', alpha=0.7)
         axes[channel_idx].scatter(range(len(data_array[channel])), data_array[channel], label=f'Channel: {channel}', alpha=0.7, s=10, marker='x')
+        _highlight_nan_background(axes[channel_idx], data_array[channel])
         axes[channel_idx].set_ylabel(f'{channel}')
         channel_idx += 1
                
