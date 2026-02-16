@@ -254,7 +254,8 @@ def perform_signal_processing(
                 processed_data_array_before=processed_data_array_copy,
                 processed_data_array_after=processed_data_array,
                 signal_processing_config=signal_processing,
-                output_path=metadata.get("output_path_process_images", "outputs/reports/process_images")
+                output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"),
+                windowing_config=metadata.get("windowing_config", None)
             )
 
 

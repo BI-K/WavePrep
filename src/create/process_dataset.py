@@ -416,7 +416,8 @@ def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_fil
                 start_offset_seconds = float(match["offset_start_seconds"].iloc[0])
                 end_offset_seconds = float(match["offset_end_seconds"].iloc[0])
                 
-                merge_step_visualizations_for_record(record, start_offset_seconds, end_offset_seconds, signal_processing_config=signal_config, output_path=output_path)
+                windowing_config = config.get('windowing', {})
+                merge_step_visualizations_for_record(record, start_offset_seconds, end_offset_seconds, signal_processing_config=signal_config, output_path=output_path, windowing_config=windowing_config)
 
         # TODO fix Save reports
         # save_reports(results, processing_time, config, output_manager, logger)

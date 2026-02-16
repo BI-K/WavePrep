@@ -355,6 +355,7 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         metadata_base["min_record_duration"] = config.get('validation', {}).get('min_record_duration', 7200)
         metadata_base["record_id"] = record_id
         metadata_base["output_path_process_images"] = str(Path(config.get("output", {}).get("base_dir","")) / "reports" / "process_images")
+        metadata_base["windowing_config"] = config.get('windowing', {})
         
         # Load signal data
         if "n" in record_id:
@@ -520,7 +521,8 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
             "min_record_duration": config.get('validation', {}).get('min_record_duration', 7200),
             "sampling_rate": current_fs[-1] if len(current_fs) > 0 else 1.0,
             "imputer_path": str(Path(config.get("output", {}).get("base_dir","")) / "data" / "iterative_imputer_X.pkl"),
-            "output_path_process_images": str(Path(config.get("output", {}).get("base_dir","")) / "reports" / "process_images")
+            "output_path_process_images": str(Path(config.get("output", {}).get("base_dir","")) / "reports" / "process_images"),
+            "windowing_config": config.get('windowing', {})
             }
 
         # read all file_names in subject_path

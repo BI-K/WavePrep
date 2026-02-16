@@ -634,7 +634,7 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
         plt.close(fig)
 
 
-def visualize_step_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, signal_processing_config, output_path="outputs/img/"):
+def visualize_step_for_record( record_id: str, step_id: int, processed_data_array_before, processed_data_array_after, signal_processing_config, output_path="outputs/img/", windowing_config=None):
 
         if record_id and processed_data_array_before and processed_data_array_after:
 
@@ -645,12 +645,36 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
             channels_before = list(data_before.keys())
             channels_after = list(data_after.keys())
 
-            fig = plt.figure(figsize=(image_width / 2, image_height))
-            fig_zoom = plt.figure(figsize=(image_width / 2, image_height))
+            # Calculate figure width: use sqrt-based ratio for observation/prediction records
+            fig_width = image_width / 2  # default: half width (two figures side by side = full width)
+            if windowing_config and ("observation" in record_id or "prediction" in record_id):
+                obs_w = windowing_config.get('observation_window', 3600)
+                pred_w = windowing_config.get('prediction_window', 300)
+                sqrt_obs = math.sqrt(max(obs_w, 1))
+                sqrt_pred = math.sqrt(max(pred_w, 1))
+                if "observation" in record_id:
+                    fig_width = image_width * sqrt_obs / (sqrt_obs + sqrt_pred)
+                else:
+                    fig_width = image_width * sqrt_pred / (sqrt_obs + sqrt_pred)
+
+            fig = plt.figure(figsize=(fig_width, image_height))
+            fig_zoom = plt.figure(figsize=(fig_width, image_height))
             gs = fig.add_gridspec(2 * len(channels_before), hspace=0, figure=fig)
             axes = gs.subplots(sharex=True, sharey=False)
             gs_zoom = fig_zoom.add_gridspec(2 * len(channels_before), hspace=0, figure=fig_zoom)
             axes_zoom = gs_zoom.subplots(sharex=True, sharey=False)
+
+            # For obs/pred records, enforce fixed absolute-pixel margins matching
+            # normal figures (prevents content center shift in merged reports).
+            # Matplotlib uses proportional margins (left=12.5%, right=10%) which
+            # create different absolute pixel margins for different figure widths,
+            # shifting the combined obs+pred content envelope to the right.
+            if windowing_config and ("observation" in record_id or "prediction" in record_id):
+                ref_half = image_width / 2  # normal figure width reference (15 inches)
+                left_frac = 0.125 * ref_half / fig_width
+                right_frac = 1 - 0.1 * ref_half / fig_width
+                fig.subplots_adjust(left=left_frac, right=right_frac)
+                fig_zoom.subplots_adjust(left=left_frac, right=right_frac)
             
             # Ensure axes are always iterable
             if not isinstance(axes, np.ndarray):
@@ -738,7 +762,7 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
 
 
 
-def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_offset_seconds, signal_processing_config, output_path="outputs/img/"):
+def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_offset_seconds, signal_processing_config, output_path="outputs/img/", windowing_config=None):
 
     if (not "observation" in record_id) and (not "prediction" in record_id):
 
@@ -814,6 +838,20 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
 
             # concatenate images horizontally
             if images:
+                # For observation + prediction pairs, match heights before concat
+                # (they may differ slightly due to sqrt-based figsize)
+                is_obs_pred = (len(images) == 2 and len(image_file_group) == 2 and
+                               any("observation" in f for f in image_file_group) and
+                               any("prediction" in f for f in image_file_group))
+                if is_obs_pred and len(images) == 2:
+                    target_h = max(images[0].shape[0], images[1].shape[0])
+                    for k in range(2):
+                        if images[k].shape[0] != target_h:
+                            # Scale width proportionally to match target height
+                            scale = target_h / images[k].shape[0]
+                            new_w = int(images[k].shape[1] * scale)
+                            images[k] = cv2.resize(images[k], (new_w, target_h))
+
                 merged_img = cv2.hconcat(images)
 
                 if len(image_file_group) > 0:
@@ -852,13 +890,19 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
             # Find the maximum width
             max_width = max(img.shape[1] for img in images_to_append_vertically)
             
-            # Resize all images to the same width, maintaining aspect ratio
+            # Center-pad narrower images to max_width with white background
+            # (avoids stretching/distorting the plot content)
             resized_images = []
             for img in images_to_append_vertically:
                 if img.shape[1] != max_width:
-                    new_height = int(img.shape[0] * max_width / img.shape[1])
-                    resized_img = cv2.resize(img, (max_width, new_height))
-                    resized_images.append(resized_img)
+                    pad_total = max_width - img.shape[1]
+                    pad_left = pad_total // 2
+                    pad_right = pad_total - pad_left
+                    padded_img = cv2.copyMakeBorder(
+                        img, 0, 0, pad_left, pad_right,
+                        cv2.BORDER_CONSTANT, value=(255, 255, 255)
+                    )
+                    resized_images.append(padded_img)
                 else:
                     resized_images.append(img)
             
