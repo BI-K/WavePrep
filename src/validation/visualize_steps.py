@@ -383,6 +383,7 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         axes[-1].set_xlabel(f'Time Steps')
+        axes_zoom[-1].set_xlabel(f'Time Steps')
 
         return fig, fig_zoom, axes, axes_zoom
 
@@ -421,6 +422,7 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
             
         axes[-1].set_xlabel(f'Time Steps')
+        axes_zoom[-1].set_xlabel(f'Time Steps')
         return fig, fig_zoom, axes, axes_zoom
 
 
@@ -477,6 +479,7 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
         axes[-1].set_xlabel(f'Time Steps')
+        axes_zoom[-1].set_xlabel(f'Time Steps')
 
         return fig, fig_zoom, axes, axes_zoom
 
