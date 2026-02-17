@@ -4,27 +4,14 @@ from typing import List, Tuple, Dict, Any
 from preprocessing.downsampling import create_downsampler
 from preprocessing.imputing import create_imputer
 from validation.visualize_steps import visualize_step_for_record, visualize_long_nan_removal_for_record
+from common.signal_data import SignalData
+from common.processing_context import ProcessingContext
 import copy
 
 
 class DatasetCreationError(Exception):
     """Custom exception for dataset creation errors."""
     pass
-
-
-def get_channel_signal_from_array(data, channel_name, channel_names):
-    # get channel signal
-    if channel_name not in channel_names:
-            raise DatasetCreationError(f"Channel {channel_name} not found in filtered names: {channel_names}")
-
-    # channel_index = channel_names.index(channel_name)
-    channel_index = next((i for i, name in enumerate(channel_names) if name == channel_name), None)
-    if channel_index is None:
-        raise DatasetCreationError(f"Channel {channel_name} not found in filtered names: {channel_names}")
-    channel = data[:, channel_index]
-    # turn into np.array
-    channel = np.array(channel)
-    return channel
 
 
 def clean_data(channel, lower_threshold, upper_threshold):
@@ -71,10 +58,7 @@ def merge_intervals(intervals):
 
     return merged
 
-def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_nans):
-    # check consecutive nans in each channel
-    # channel, start_idx, end_idx
-
+def remove_long_nan_sequences(step_idx, processed_data_array: List[SignalData], max_consecutive_nans):
     cleaned_processed_data_array = []
 
     logger_infos = []
@@ -116,18 +100,14 @@ def remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_na
             for i in range(len(merged_sequences) - 1):
                 non_nan_sequences.append((merged_sequences[i][1], merged_sequences[i + 1][0]))
                 
-            non_nan_sequences.append((merged_sequences[-1][1], int(len(next(iter(processed_data.values()))))))
+            non_nan_sequences.append((merged_sequences[-1][1], processed_data.n_samples))
 
             non_nan_sequences_each_data_array.append(non_nan_sequences)
             for start, end in non_nan_sequences:
                 if end - start <= 0:
                     continue
-                snippet = {}
-                for channel_name, channel in processed_data.items():
-                    snippet[channel_name] = channel[start:end]
-
-                cleaned_processed_data_array.append(snippet)
-        # else no long nan sequences that need to be removed were found, so imply append the original processed data
+                channels = {name: data[start:end] for name, data in processed_data.items()}
+                cleaned_processed_data_array.append(SignalData(channels=channels))
         else:
             cleaned_processed_data_array.append(processed_data)
             
@@ -148,43 +128,48 @@ def downsample_record(channel, to_downsample, current_fs):
 
 
 def perform_signal_processing(
-        filtered_data: np.ndarray, 
-        filtered_names: List[str], 
-        signal_processing: List[Dict[str, Any]], 
+        filtered_data: np.ndarray,
+        filtered_names: List[str],
+        signal_processing: List[Dict[str, Any]],
         start_at_processing_step: int,
         process_until_step: int,
-        metadata: Dict[str, Any],
+        metadata: ProcessingContext,
         long_nan_removal_config: Dict[str, Any] = None,
         logger: logging.Logger = None,
         records_to_visualize = []
-    ) -> Tuple[np.ndarray, List[str]]:
+    ) -> Tuple[List[SignalData], List[str]]:
     """
     Perform signal processing on the filtered data.
-    
+
     Args:
         filtered_data: Filtered signal data (samples x channels)
         filtered_names: Names of the channels in the filtered data
-        signal_processing: Configuration for signal processing
-        metadata: Metadata containing sampling rate and other info
-        
+        signal_processing: Per-channel processing step configuration
+        start_at_processing_step: First processing step index to execute
+        process_until_step: Stop before this step index
+        metadata: Processing context with sampling rate, record ID, and paths
+        long_nan_removal_config: Config for removing long NaN sequences
+        logger: Logger instance
+        records_to_visualize: Record IDs selected for step visualization
+
     Returns:
-        Processed signal data and updated channel names
+        Tuple of (processed signal snippets, log messages)
     """
-    # Get logger if not provided
     if logger is None:
         logger = logging.getLogger(__name__)
 
     logger_infos = []
-    
-    processed_data_array = []
-    processed_data = {}
+
+    # Build initial SignalData from the filtered numpy array
+    channels = {}
+    filtered_names_list = list(filtered_names)
     for item in signal_processing:
         channel_name = item.get('channel')
-        if channel_name not in filtered_names:
-            raise DatasetCreationError(f"Channel {channel_name} not found in filtered names: {filtered_names}")
-        else:
-            processed_data[channel_name] = get_channel_signal_from_array(filtered_data, channel_name, filtered_names)
-    processed_data_array.append(processed_data)
+        if channel_name not in filtered_names_list:
+            raise DatasetCreationError(f"Channel {channel_name} not found in filtered names: {filtered_names_list}")
+        channel_idx = filtered_names_list.index(channel_name)
+        channels[channel_name] = np.array(filtered_data[:, channel_idx])
+    processed_data_array: List[SignalData] = [SignalData(channels=channels)]
 
 
 
@@ -201,25 +186,19 @@ def perform_signal_processing(
     # for donwsampling we need the current fs
     current_fs = {}
     for channel_name in filtered_names:
-        current_fs[channel_name] = metadata['sampling_rate']
+        current_fs[channel_name] = metadata.sampling_rate
     for step_idx in range(start_at_processing_step, process_until_step):
 
-        # copy it in a way that we can compare before and after
         processed_data_array_copy = copy.deepcopy(processed_data_array)
         for channel_name in filtered_names:
 
-            # get channel config where channel_name matches "channel" in the list of dicts
             channel_config = next((item for item in signal_processing if item.get('channel') == channel_name), None)
             if channel_config:
 
-            
                 steps = channel_config.get('steps', [])
-                # get dict from channel_config, where "step" matches step_idx
                 current_step = next((step for step in steps if step.get('step') == step_idx), None)
 
-                # print("Current step for channel", channel_name, ":", current_step)
                 if current_step:
-                    # print(f"Processing step {step_idx} for channel {channel_name}")
 
                     for i in range(len(processed_data_array)):
                         channel = processed_data_array[i][channel_name]
@@ -229,7 +208,6 @@ def perform_signal_processing(
                         to_imputation = current_step.get("imputation", {})
 
                         if to_downsample != {}:
-                            #print(f"Downsampling channel {channel_name} at step {step_idx}")
                             channel, current_fs[channel_name] = downsample_record(channel, to_downsample, current_fs[channel_name])
 
                         if to_data_cleaning != {}:
@@ -238,24 +216,22 @@ def perform_signal_processing(
                             channel = clean_data(channel, lower_threshold, upper_threshold)
 
                         if to_imputation != {}:
-                            #print(f"Imputing channel {channel_name} at step {step_idx}")
-                            imputation_stategy = to_imputation.get('method', 'mean')
-                            imputer = create_imputer(imputation_stategy)
-                            #print("Imputer created:", imputer)
-                            channel = imputer.impute(processed_data_array[i], channel_name, metadata.get("imputer_path", ""))
+                            imputation_strategy = to_imputation.get('method', 'mean')
+                            imputer = create_imputer(imputation_strategy)
+                            channel = imputer.impute(processed_data_array[i], channel_name, metadata.imputer_path)
                             
                         processed_data_array[i][channel_name] = channel
 
 
-        if metadata.get("record_id") in records_to_visualize:
+        if metadata.record_id in records_to_visualize:
             visualize_step_for_record(
-                record_id=metadata.get("record_id", "unknown"),
+                record_id=metadata.record_id,
                 step_id=step_idx,
                 processed_data_array_before=processed_data_array_copy,
                 processed_data_array_after=processed_data_array,
                 signal_processing_config=signal_processing,
-                output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"),
-                windowing_config=metadata.get("windowing_config", None)
+                output_path=metadata.output_path_process_images,
+                windowing_config=metadata.windowing_config
             )
 
 
@@ -266,28 +242,25 @@ def perform_signal_processing(
             processed_data_array, new_logger_infos, non_nan_sequences = remove_long_nan_sequences(step_idx, processed_data_array, max_consecutive_nans)
             logger_infos.extend(new_logger_infos)
 
-            # remove everything that does not meet the "min_record_duration" requirement
             intermediate_processed_data_array = copy.deepcopy(processed_data_array)
             processed_data_array = []
             for i in range(len(intermediate_processed_data_array)):
                 processed_data = intermediate_processed_data_array[i]
-                total_length = len(next(iter(processed_data.values())))
-                # TODO more elegant solution to get current fs
-                if total_length >=  current_fs[filtered_names[0]] * metadata.get("min_record_duration", 0):
+                if processed_data.n_samples >= current_fs[filtered_names[0]] * metadata.min_record_duration:
                     processed_data_array.append(processed_data)
                 else:
-                    logger_infos.append(f"Removed processed data due to insufficient duration: {total_length / current_fs[filtered_names[0]]}s")
+                    logger_infos.append(f"Removed processed data due to insufficient duration: {processed_data.n_samples / current_fs[filtered_names[0]]}s")
             
 
-            if metadata.get("record_id") in records_to_visualize:
+            if metadata.record_id in records_to_visualize:
                 visualize_long_nan_removal_for_record(
-                    record_id=metadata.get("record_id", "unknown"),
+                    record_id=metadata.record_id,
                     step_id=step_idx,
                     processed_data_array_before=processed_data_array_copy,
                     processed_data_array_after=processed_data_array,
                     non_nan_sequences=non_nan_sequences,
-                    min_required_length=metadata.get("min_record_duration", 0) * current_fs[filtered_names[0]],
-                    output_path=metadata.get("output_path_process_images", "outputs/reports/process_images")
+                    min_required_length=metadata.min_record_duration * current_fs[filtered_names[0]],
+                    output_path=metadata.output_path_process_images
                 )
 
 

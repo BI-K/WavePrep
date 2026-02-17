@@ -37,8 +37,7 @@ def initialize_visualization(list_of_all_records, config):
         else:
             records = list_of_all_records
 
-        seed = config.get('random_seed', 42)
-        random.seed(seed)
+        random.seed(config.splitting.random_seed)
 
         records_including_after_split = []
         for record in records:
@@ -648,8 +647,8 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
             # Calculate figure width: use sqrt-based ratio for observation/prediction records
             fig_width = image_width / 2  # default: half width (two figures side by side = full width)
             if windowing_config and ("observation" in record_id or "prediction" in record_id):
-                obs_w = windowing_config.get('observation_window', 3600)
-                pred_w = windowing_config.get('prediction_window', 300)
+                obs_w = windowing_config.observation_window
+                pred_w = windowing_config.prediction_window
                 sqrt_obs = math.sqrt(max(obs_w, 1))
                 sqrt_pred = math.sqrt(max(pred_w, 1))
                 if "observation" in record_id:

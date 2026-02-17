@@ -25,38 +25,23 @@ from .splitter_exceptions import (
     InsufficientDataError, SplitRatioError
 )
 
+from common.pipeline_config import PipelineConfig
+
 # Suppress warnings
 warnings.filterwarnings('ignore')
 
 
-def validate_config(config: Dict[str, Any]):
+def validate_config(config: PipelineConfig):
     """Validate the configuration parameters."""
-    required_fields = [
-        'train_ratio', 'validation_ratio',
-        'test_ratio', 'random_seed'
-    ]
-    
-    for field in required_fields:
-        if field not in config:
-            raise ConfigurationError(f"Missing required configuration field: {field}")
-    
-    # Validate ratios sum to 1.0
-    total_ratio = (config['train_ratio'] + 
-                  config['validation_ratio'] + 
-                  config['test_ratio'])
+    s = config.splitting
+    total_ratio = s.train_ratio + s.validation_ratio + s.test_ratio
     if abs(total_ratio - 1.0) > 0.001:
         raise SplitRatioError(f"Split ratios must sum to 1.0, got {total_ratio}")
-    
-    # Validate all ratios are positive
-    for ratio_name in ['train_ratio', 'validation_ratio', 'test_ratio']:
-        ratio = config[ratio_name]
-        #if ratio <= 0:
-        #    raise SplitRatioError(f"{ratio_name} must be positive, got {ratio}")
 
 
-def set_random_seeds(config: Dict[str, Any], logger):
+def set_random_seeds(config: PipelineConfig, logger):
     """Set random seeds for reproducibility."""
-    seed = config['random_seed']
+    seed = config.splitting.random_seed
     random.seed(seed)
     np.random.seed(seed)
     logger.info(f"Random seed set to: {seed}")
@@ -97,17 +82,15 @@ def resolve_latest_input_path(input_path: str, logger) -> Path:
     return path
 
 
-def create_output_directory(config: Dict[str, Any], logger) -> Path:
+def create_output_directory(config: PipelineConfig, logger) -> Path:
     """Create timestamped output directory structure."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_name = f"split_{timestamp}"
     
-    base_dir = Path(config.get('output', {}).get('base_dir', 'outputs/split'))
+    base_dir = Path(config.output.base_dir)
     output_dir = base_dir
     
-    # Create directory structure from config
-    output_config = config.get('output', {})
-    directories = output_config.get('directory_structure', ['logs', 'reports', 'split_data', 'splits'])
+    directories = config.output.directory_structure
     
     for dir_name in directories:
         (output_dir / dir_name).mkdir(parents=True, exist_ok=True)
@@ -188,13 +171,13 @@ def discover_subjects_and_samples(input_path: Path, logger) -> Dict[str, Dict[st
     return subjects_data
 
 
-def filter_subjects(subjects_data: Dict[str, Dict[str, Any]], config: Dict[str, Any], logger) -> Dict[str, Dict[str, Any]]:
+def filter_subjects(subjects_data: Dict[str, Dict[str, Any]], config: PipelineConfig, logger) -> Dict[str, Dict[str, Any]]:
     """
     Filter subjects based on configuration criteria.
     
     Args:
         subjects_data: Dictionary of subject data
-        config: Configuration dictionary
+        config: Pipeline configuration
         logger: Logger instance
         
     Returns:
@@ -204,12 +187,10 @@ def filter_subjects(subjects_data: Dict[str, Dict[str, Any]], config: Dict[str, 
     
     filtered_subjects = {}
     
-    # Apply minimum samples filter
-    min_samples = config.get('min_samples_per_subject', 1)
+    min_samples = config.splitting.min_samples_per_subject
     
-    # Apply include/exclude filters
-    exclude_subjects = set(config.get('exclude_subjects', []))
-    include_only = config.get('include_only_subjects', [])
+    exclude_subjects = set(config.splitting.exclude_subjects)
+    include_only = config.splitting.include_only_subjects
     include_only_set = set(include_only) if include_only else None
     
     excluded_count = 0
@@ -245,7 +226,7 @@ def filter_subjects(subjects_data: Dict[str, Dict[str, Any]], config: Dict[str, 
     return filtered_subjects
 
 
-def perform_group_shuffle_split(subjects_data: Dict[str, Dict[str, Any]], config: Dict[str, Any], logger) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
+def perform_group_shuffle_split(subjects_data: Dict[str, Dict[str, Any]], config: PipelineConfig, logger) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
     """
     Split subjects using scikit-learn's GroupShuffleSplit for group-aware splitting.
     
@@ -284,15 +265,14 @@ def perform_group_shuffle_split(subjects_data: Dict[str, Dict[str, Any]], config
     logger.info(f"Created group arrays: {len(X_indices)} total sample points across {len(subjects)} subjects")
     
     # Calculate test_size for GroupShuffleSplit
-    # GroupShuffleSplit's test_size refers to the proportion of groups (subjects), not samples
-    test_size = config['validation_ratio'] + config['test_ratio']
-    val_size = config['validation_ratio'] / test_size if test_size > 0 else 0
+    test_size = config.splitting.validation_ratio + config.splitting.test_ratio
+    val_size = config.splitting.validation_ratio / test_size if test_size > 0 else 0
     
     # First split: separate training from (validation + test)
     gss_train_test = GroupShuffleSplit(
         n_splits=1, 
         test_size=test_size,
-        random_state=config['random_seed']
+        random_state=config.splitting.random_seed
     )
     
     train_indices, temp_indices = next(gss_train_test.split(X_indices, groups=groups))
@@ -304,7 +284,7 @@ def perform_group_shuffle_split(subjects_data: Dict[str, Dict[str, Any]], config
     logger.info(f"Initial split: {len(train_subjects)} train subjects, {len(temp_subjects)} temp subjects")
     
     # Second split: separate validation from test within the temp set
-    if len(temp_subjects) > 1 and config['validation_ratio'] > 0:
+    if len(temp_subjects) > 1 and config.splitting.validation_ratio > 0:
         # Create arrays for temp subjects only
         temp_X = []
         temp_groups = []
@@ -322,8 +302,8 @@ def perform_group_shuffle_split(subjects_data: Dict[str, Dict[str, Any]], config
         # Split temp into validation and test
         gss_val_test = GroupShuffleSplit(
             n_splits=1,
-            test_size=1 - val_size,  # test_size as proportion of temp subjects
-            random_state=config['random_seed'] + 1
+            test_size=1 - val_size,
+            random_state=config.splitting.random_seed + 1
         )
         
         val_indices, test_indices = next(gss_val_test.split(temp_X, groups=temp_groups))
@@ -359,22 +339,13 @@ def perform_group_shuffle_split(subjects_data: Dict[str, Dict[str, Any]], config
     return splits, split_samples
 
 
-def copy_split_data(splits: Dict[str, List[str]], input_path: Path, output_dir: Path, config: Dict[str, Any], logger):
+def copy_split_data(splits: Dict[str, List[str]], input_path: Path, output_dir: Path, config: PipelineConfig, logger):
     """
     Copy actual data files (CSV files) to split directories for direct ML training.
-    
-    Args:
-        splits: Dictionary with split assignments (subject IDs)
-        input_path: Path to original data directory
-        output_dir: Output directory path
-        config: Configuration dictionary
-        logger: Logger instance
     """
     logger.info("Copying data files to split directories...")
     
-    # Find the data directory name from config
-    output_config = config.get('output', {})
-    directories = output_config.get('directory_structure', ['logs', 'reports', 'split_data', 'splits'])
+    directories = config.output.directory_structure
     
     split_data_dir_name = None
     for dir_name in directories:
@@ -415,7 +386,7 @@ def copy_split_data(splits: Dict[str, List[str]], input_path: Path, output_dir: 
     logger.info(f"Files copied to: {split_data_dir}")
 
 
-def save_splits(splits: Dict[str, List[str]], split_samples: Dict[str, int], output_dir: Path, config: Dict[str, Any], logger):
+def save_splits(splits: Dict[str, List[str]], split_samples: Dict[str, int], output_dir: Path, config: PipelineConfig, logger):
     """Save split assignments to JSON files."""
     splits_dir = output_dir / 'splits'
     
@@ -440,11 +411,11 @@ def save_splits(splits: Dict[str, List[str]], split_samples: Dict[str, int], out
                 'total_subjects': sum(len(subjects) for subjects in splits.values()),
                 'total_samples': sum(split_samples.values()),
                 'split_ratios': {
-                    'train_ratio': config['train_ratio'],
-                    'validation_ratio': config['validation_ratio'],
-                    'test_ratio': config['test_ratio']
+                    'train_ratio': config.splitting.train_ratio,
+                    'validation_ratio': config.splitting.validation_ratio,
+                    'test_ratio': config.splitting.test_ratio
                 },
-                'random_seed': config['random_seed'],
+                'random_seed': config.splitting.random_seed,
                 'created_at': datetime.now().isoformat()
             }
         }, f, indent=2)
@@ -452,10 +423,11 @@ def save_splits(splits: Dict[str, List[str]], split_samples: Dict[str, int], out
     logger.info("Split assignments saved successfully")
 
 
-def generate_markdown_report(splits: Dict[str, List[str]], split_samples: Dict[str, int], subjects_data: Dict[str, Dict[str, Any]], config: Dict[str, Any]) -> str:
+def generate_markdown_report(splits: Dict[str, List[str]], split_samples: Dict[str, int], subjects_data: Dict[str, Dict[str, Any]], config: PipelineConfig) -> str:
     """Generate markdown report content."""
     total_subjects = sum(len(subjects) for subjects in splits.values())
     total_samples = sum(split_samples.values())
+    s = config.splitting
     
     lines = [
         "# Dataset Splitting Report",
@@ -466,7 +438,7 @@ def generate_markdown_report(splits: Dict[str, List[str]], split_samples: Dict[s
         f"- **Total Subjects:** {total_subjects}",
         f"- **Total Samples:** {total_samples:,}",
         f"- **Splitting Method:** Group-based shuffle split",
-        f"- **Random Seed:** {config['random_seed']}",
+        f"- **Random Seed:** {s.random_seed}",
         "",
         "## Split Distribution",
         ""
@@ -477,7 +449,7 @@ def generate_markdown_report(splits: Dict[str, List[str]], split_samples: Dict[s
         samples_count = split_samples[split_name]
         subject_pct = (subjects_count / total_subjects * 100) if total_subjects > 0 else 0
         sample_pct = (samples_count / total_samples * 100) if total_samples > 0 else 0
-        target_pct = config[f'{split_name}_ratio'] * 100
+        target_pct = getattr(s, f'{split_name}_ratio') * 100
         
         lines.extend([
             f"### {split_name.capitalize()} Set",
@@ -511,17 +483,17 @@ def generate_markdown_report(splits: Dict[str, List[str]], split_samples: Dict[s
     
     lines.extend([
         "## Configuration",
-        f"- **Input Path:** {config.get("output", {}).get("base_dir") + "/data"}",
-        f"- **Train Ratio:** {config['train_ratio']}",
-        f"- **Validation Ratio:** {config['validation_ratio']}",
-        f"- **Test Ratio:** {config['test_ratio']}",
+        f"- **Input Path:** {config.output.base_dir}/data",
+        f"- **Train Ratio:** {s.train_ratio}",
+        f"- **Validation Ratio:** {s.validation_ratio}",
+        f"- **Test Ratio:** {s.test_ratio}",
         ""
     ])
     
     return '\n'.join(lines)
 
 
-def generate_detailed_analysis(splits: Dict[str, List[str]], split_samples: Dict[str, int], subjects_data: Dict[str, Dict[str, Any]], config: Dict[str, Any]) -> Dict[str, Any]:
+def generate_detailed_analysis(splits: Dict[str, List[str]], split_samples: Dict[str, int], subjects_data: Dict[str, Dict[str, Any]], config: PipelineConfig) -> Dict[str, Any]:
     """Generate detailed analysis of the splitting results."""
     # Convert Path objects to strings for JSON serialization
     def convert_paths_to_strings(obj):
@@ -534,7 +506,7 @@ def generate_detailed_analysis(splits: Dict[str, List[str]], split_samples: Dict
         else:
             return obj
     
-    serializable_config = convert_paths_to_strings(config)
+    serializable_config = convert_paths_to_strings(config.to_dict())
     serializable_subjects_data = convert_paths_to_strings(subjects_data)
     
     analysis = {
@@ -562,7 +534,7 @@ def generate_detailed_analysis(splits: Dict[str, List[str]], split_samples: Dict
     return analysis
 
 
-def generate_reports(splits: Dict[str, List[str]], split_samples: Dict[str, int], subjects_data: Dict[str, Dict[str, Any]], output_dir: Path, config: Dict[str, Any], logger):
+def generate_reports(splits: Dict[str, List[str]], split_samples: Dict[str, int], subjects_data: Dict[str, Dict[str, Any]], output_dir: Path, config: PipelineConfig, logger):
     """Generate comprehensive reports about the splitting process."""
     reports_dir = output_dir / 'reports'
     
@@ -581,12 +553,12 @@ def generate_reports(splits: Dict[str, List[str]], split_samples: Dict[str, int]
     logger.info("Reports generated successfully")
 
 
-def split_dataset(config: Dict[str, Any], logger, output_dir: Path = None) -> Dict[str, Any]:
+def split_dataset(config: PipelineConfig, logger, output_dir: Path = None) -> Dict[str, Any]:
     """
     Perform the complete dataset splitting process.
     
     Args:
-        config: Configuration dictionary
+        config: Pipeline configuration
         logger: Logger instance
         output_dir: Optional output directory (if None, will create new one)
         
@@ -595,14 +567,10 @@ def split_dataset(config: Dict[str, Any], logger, output_dir: Path = None) -> Di
     """
     logger.info("Starting dataset splitting process...")
     
-    # Validate configuration
     validate_config(config)
-    
-    # Set random seeds for reproducibility
     set_random_seeds(config, logger)
     
-    # Resolve input path
-    input_path = Path(config.get("output", {}).get("base_dir") + "/data")
+    input_path = Path(config.output.base_dir) / "data"
     
     # Discover subjects and samples
     subjects_data = discover_subjects_and_samples(input_path, logger)
@@ -617,9 +585,7 @@ def split_dataset(config: Dict[str, Any], logger, output_dir: Path = None) -> Di
     if output_dir is None:
         output_dir = create_output_directory(config, logger)
     else:
-        # Ensure the necessary subdirectories exist in the provided output directory
-        output_config = config.get('output', {})
-        directories = output_config.get('directory_structure', ['logs', 'reports', 'split_data', 'splits'])
+        directories = config.output.directory_structure
         
         for dir_name in directories:
             (output_dir / dir_name).mkdir(parents=True, exist_ok=True)
@@ -634,7 +600,7 @@ def split_dataset(config: Dict[str, Any], logger, output_dir: Path = None) -> Di
         logger.info(f"Using existing output directory: {output_dir}")
     
     # Copy data files to split directories
-    if not config.get('dry_run', False):
+    if not config.splitting.dry_run:
         copy_split_data(splits, input_path, output_dir, config, logger)
     
     # Save split assignments and generate reports
@@ -660,27 +626,18 @@ def split_dataset(config: Dict[str, Any], logger, output_dir: Path = None) -> Di
     return results
 
 
-def run_dataset_splitting(config: Dict[str, Any], output_manager, logger):
+def run_dataset_splitting(config: PipelineConfig, output_manager, logger):
     """
     Run the complete dataset splitting process.
-    
-    Args:
-        config: Configuration dictionary
-        output_manager: Output manager instance
-        logger: Logger instance
     """
     logger.info("Starting dataset splitting")
     
-    # Log configuration
-    input_path = config.get("output", {}).get("base_dir") + "/data"
-    train_ratio = config.get('train_ratio')
-    validation_ratio = config.get('validation_ratio')
-    test_ratio = config.get('test_ratio')
-    random_seed = config.get('random_seed', 42)
+    s = config.splitting
+    input_path = f"{config.output.base_dir}/data"
     
     logger.info(f"Input path: {input_path}")
-    logger.info(f"Split ratios - Train: {train_ratio}, Validation: {validation_ratio}, Test: {test_ratio}")
-    logger.info(f"Random seed: {random_seed}")
+    logger.info(f"Split ratios - Train: {s.train_ratio}, Validation: {s.validation_ratio}, Test: {s.test_ratio}")
+    logger.info(f"Random seed: {s.random_seed}")
     
     try:
         # Get the output directory from the output manager

@@ -3,29 +3,23 @@
 MIMIC III Dataset Creator
 """
 
-import json
 import os
 import time
-import wfdb
 import numpy as np
 import pandas as pd
 import logging
-import urllib3
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
-from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor 
-import logging.handlers
-import queue
-import threading
+from typing import Dict, List, Tuple, Any
 
+from common.pipeline_config import PipelineConfig
+from common.processing_context import ProcessingContext
+from create.record_loader import RecordLoader, WfdbRecordLoader, CsvRecordLoader, LoadedRecord
 from preprocessing.windowing import create_windower
 from preprocessing.signal_processing import perform_signal_processing
 from preprocessing.imputing import is_imputer_that_needs_split
+from common.signal_data import SignalData, WindowedData
 
-from validation.validation import validate_record, generate_detailed_analysis, analyze_nan_values, save_reports
+from validation.validation import validate_record, generate_detailed_analysis, save_reports
 from validation.visualize_steps import visualize_windowing_for_record
 
 
@@ -43,158 +37,6 @@ def extract_subject_id(record_path: str) -> str:
 def extract_record_id(record_path: str) -> str:
     """Extract record ID from record path."""
     return Path(record_path).parts[-1]
-
-
-def load_singular_record_from_wfdb(record_name: str, directory: str, offset_start_seconds: int, offset_end_seconds: int, required_channels: List[str], strict_nan_check:bool, metadata) -> Tuple[Dict, str]:
-
-    # Load the record
-    record = wfdb.rdrecord(record_name, pn_dir=directory)
-        
-    # Get available channels and find indices for required channels
-    available_channels = record.sig_name
-    channel_indices = []
-    found_channels = []
-        
-    for ch in required_channels:
-        if ch in available_channels:
-            idx = available_channels.index(ch)
-            if idx not in channel_indices:
-                channel_indices.append(idx)
-                found_channels.append(ch)
-
-    if not channel_indices:
-        return {}, f"No required channels found. Required: {required_channels}, Available: {available_channels}"
-        
-    # Extract only the required channels - this is the key fix
-    signal_data = record.p_signal[:, channel_indices]
-
-    # Apply offsets
-    if offset_start_seconds is not None and offset_end_seconds is not None:
-        start_sample = int(offset_start_seconds * record.fs)
-        end_sample = int(offset_end_seconds * record.fs)
-        signal_data = signal_data[start_sample:end_sample]
-
-    header = wfdb.rdheader(record_name, pn_dir=directory)
-
-    # Validate data
-    if signal_data is None:
-        return {}, "No signal data available in record"
-        
-    # Check for NaN values only in the required channels
-    if strict_nan_check:
-        nan_diagnostic = analyze_nan_values(signal_data, found_channels, header)
-        return {}, f"NaN values detected in required channels: {nan_diagnostic}"
-    
-
-    metadata["sampling_rate"] = header.fs
-    metadata["n_channels"] = header.n_sig,
-    metadata["available_channels"] = found_channels
-
-    result = {
-        "signal_data": signal_data,
-        "found_channels": found_channels,
-        "start_offset_seconds": 0,
-        "metadata": metadata
-    }
-    return result, ""
-
-
-def load_record_data_from_wfdb_non_numeric(record_path: str,  offset_start_seconds: int, offset_end_seconds: int, config: Dict[str, Any], logger, metadata) -> Tuple[List[Dict], str]:
-    """
-    Load signal data from a record.
-    
-    Returns:
-        Tuple of (signal_data, channel_names, error_message)
-    """
-    try:
-        database_name = config.get('database_name', 'mimic3wdb-matched/1.0')
-        validation_config = config.get('validation', {})
-        strict_nan_check = validation_config.get('strict_nan_check', True)
-        
-        # Get required channels
-        input_channels = config.get('input_channels', [])
-        output_channels = config.get('output_channels', [])
-        required_channels = list(set(input_channels + output_channels))
-        minimum_length = config.get("validation",{}).get("min_record_duration", 0)
-        
-        # Extract directory and record name
-        path_parts = Path(record_path).parts
-        directory = f"{database_name}/{'/'.join(path_parts[:-1])}"
-        record_name = path_parts[-1]
-
-        header = wfdb.rdheader(record_name, pn_dir=directory)
-        segments = header.seg_name
-        cleaned_segments = [s for s in segments if s != "~"]
-
-        current_start_offset = 0
-        current_end_offset = 0
-        results = []
-        result_error_string = ""
-        for segment in cleaned_segments:
-            segment_metadata = wfdb.rdheader(record_name=segment, pn_dir=directory)
-            segment_duration_in_seconds = segment_metadata.sig_len/(segment_metadata.fs)
-
-            # stopping criteria based on user slected offsets of record
-            if current_start_offset < offset_start_seconds:
-                continue
-            if current_start_offset > offset_end_seconds:
-                continue
-
-            if all(ch in segment_metadata.sig_name for ch in required_channels) and segment_duration_in_seconds >= minimum_length:
-                # cut record segment if needed
-                if current_start_offset + segment_duration_in_seconds > offset_end_seconds:
-                    record_specific_end_offset = offset_end_seconds - current_start_offset
-                else:
-                    record_specific_end_offset = segment_duration_in_seconds
-
-                result, error_str = load_singular_record_from_wfdb(record_name = segment, directory = directory, offset_start_seconds = 0, offset_end_seconds=record_specific_end_offset,
-                                                 required_channels = required_channels, strict_nan_check = False, metadata=metadata)
-
-                results.append(result)
-                result_error_string += error_str
-
-            current_start_offset += segment_duration_in_seconds
-
-        return results, result_error_string
-        
-    except Exception as e:
-        print("Exception: ", e)
-        return [], f"Load error: {str(e)}"
-    
-
-def load_record_data_from_wfdb_numeric(record_path: str,  offset_start_seconds: int, offset_end_seconds: int, config: Dict[str, Any], logger, metadata) -> Tuple[List[Dict], str]:
-    """
-    Load signal data from a record.
-    
-    Returns:
-        Tuple of (signal_data, channel_names, error_message)
-    """
-    try:
-        database_name = config.get('database_name', 'mimic3wdb-matched/1.0')
-        validation_config = config.get('validation', {})
-        strict_nan_check = validation_config.get('strict_nan_check', True)
-        
-        # Get required channels
-        input_channels = config.get('input_channels', [])
-        output_channels = config.get('output_channels', [])
-        required_channels = list(set(input_channels + output_channels))
-        
-        # Extract directory and record name
-        path_parts = Path(record_path).parts
-        directory = f"{database_name}/{'/'.join(path_parts[:-1])}"
-        record_name = path_parts[-1]
-        
-        result, error_str = load_singular_record_from_wfdb(record_name = record_name, directory = directory, offset_start_seconds = offset_start_seconds, offset_end_seconds=offset_end_seconds,
-                                                 required_channels = required_channels, strict_nan_check = False, metadata=metadata)
-
-
-        if error_str != "":
-            return [], error_str
-
-        return [result], error_str
-        
-    except Exception as e:
-        return [], f"Load error: {str(e)}"
 
 
 def filter_channels(data: np.ndarray, channel_names: List[str], 
@@ -219,9 +61,9 @@ def filter_channels(data: np.ndarray, channel_names: List[str],
     return filtered_data, filtered_names
 
 
-def save_uncutsamples(samples: List[dict], 
+def save_uncutsamples(samples: List[SignalData],
                 channel_names: List[str], record_id: str, subject_id: str,
-                config: Dict[str, Any], output_manager, logger, row_index) -> int:
+                config: PipelineConfig, output_manager, logger, row_index) -> int:
     """Save training samples to CSV files grouped by subject."""
     try:
 
@@ -237,10 +79,6 @@ def save_uncutsamples(samples: List[dict],
         uncut_dir = subject_dir / "uncut"
         uncut_dir.mkdir(exist_ok=True)
 
-        # special case
-        if record_id == "p001785-2140-01-07-12-34n" and sample_idx == 326 and row_index == 30:
-            pass        
-        
         for i in range(len(samples)):
             # save obs_data in a dataframe
             uncut_dict = {}
@@ -261,44 +99,40 @@ def save_uncutsamples(samples: List[dict],
         logger.error(f"Failed to save samples for {record_id}: {e}")
         return 0
 
-def save_windows(snippets: List[dict], 
+def save_windows(windows: WindowedData,
                 channel_names: List[str], record_id: str, subject_id: str,
-                config: Dict[str, Any], output_manager, logger, row_index) -> int:
-    """Save training samples to CSV files grouped by subject."""
+                config: PipelineConfig, output_manager, logger, row_index) -> int:
+    """Save windowed samples to CSV files grouped by subject."""
     try:
 
-        # Create subject directory
         data_dir = output_manager.get_run_directory() / "data"
         data_dir.mkdir(exist_ok=True)
         subject_dir = data_dir / subject_id
         subject_dir.mkdir(parents=True, exist_ok=True)
-        
+
         samples_saved = 0
 
-        # create folders for observation and prediction
         obs_dir = subject_dir / "observation"
         obs_dir.mkdir(exist_ok=True)
         pred_dir = subject_dir / "prediction"
         pred_dir.mkdir(exist_ok=True)
 
-
-        # iterate over number of snippets
-        for snippet_idx in range(len(snippets[channel_names[0]])):
+        for window_idx in range(windows.n_windows):
             channels_obs = {}
             channels_preds = {}
             for channel_name in channel_names:
-                channels_obs[channel_name] = snippets[channel_name][snippet_idx][0]
-                channels_preds[channel_name] = snippets[channel_name][snippet_idx][1]
+                window = windows[channel_name][window_idx]
+                channels_obs[channel_name] = window.observation
+                channels_preds[channel_name] = window.prediction
 
-            # Save as CSV
             df = pd.DataFrame(channels_obs)
-            filename = f"{record_id}_sample_{snippet_idx:04d}.csv"
+            filename = f"{record_id}_sample_{window_idx:04d}.csv"
             filepath = obs_dir/ filename
             df.to_csv(filepath, index=False)
             df = pd.DataFrame(channels_preds)
-            filename = f"{record_id}_sample_{snippet_idx:04d}.csv"
+            filename = f"{record_id}_sample_{window_idx:04d}.csv"
             filepath = pred_dir / filename
-            df.to_csv(filepath, index = False)
+            df.to_csv(filepath, index=False)
             samples_saved += 1
         
         return samples_saved
@@ -309,7 +143,7 @@ def save_windows(snippets: List[dict],
 
 
 
-def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds: int, offset_end_seconds: int, start_at_step:int, until_step: int, config: Dict[str, Any], 
+def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds: int, offset_end_seconds: int, start_at_step:int, until_step: int, config: PipelineConfig, 
                               output_manager, logger_name: str, row_index, records_to_visualize) -> Tuple[str, int, str, Dict[str, Any]]:
     """
     Create training samples from a single record.
@@ -337,118 +171,79 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
     }
     
     try:
-        # Get configuration
-        input_channels = config.get('input_channels', [])
-        output_channels = config.get('output_channels', [])
-        required_channels = list(set(input_channels + output_channels))
+        required_channels = config.required_channels
+        metadata_base = ProcessingContext(
+            min_record_duration=config.validation.min_record_duration,
+            record_id=record_id,
+            output_path_process_images=str(Path(config.output.base_dir) / "reports" / "process_images"),
+            windowing_config=config.windowing,
+        )
         
-        signal_configs = config.get('signal_processing', {})
-        
-        # Validate record
-        # is_valid, error_msg, metadata = validate_record(record_path, config)
-        #if not is_valid:
-        #    details.update(metadata)
-        #    return record_id, 0, error_msg, details
-        
-        # details.update(metadata)
-        metadata_base = {}
-        metadata_base["min_record_duration"] = config.get('validation', {}).get('min_record_duration', 7200)
-        metadata_base["record_id"] = record_id
-        metadata_base["output_path_process_images"] = str(Path(config.get("output", {}).get("base_dir","")) / "reports" / "process_images")
-        metadata_base["windowing_config"] = config.get('windowing', {})
-        
-        # Load signal data
-        if "n" in record_id:
-            signal_data_list, load_error = load_record_data_from_wfdb_numeric(record_path, offset_start_seconds, offset_end_seconds, config, logger, metadata_base)
-        else:
-            signal_data_list, load_error = load_record_data_from_wfdb_non_numeric(record_path, offset_start_seconds, offset_end_seconds, config, logger, metadata_base)
+        loader: RecordLoader = WfdbRecordLoader(
+            record_path, offset_start_seconds, offset_end_seconds,
+            config, logger, metadata_base,
+        )
+        loaded_records, load_error = loader.load()
         
         samples_saved = 0
-        for result in signal_data_list:
-            signal_data = result["signal_data"]
-            channel_names= result["found_channels"]
-            metadata = result["metadata"]
-
-            # Always capture channel information if available
-            if channel_names:
-                details['channels_found'] = channel_names
+        for record in loaded_records:
+            if record.channel_names:
+                details['channels_found'] = record.channel_names
             elif 'available_channels' in details:
                 details['channels_found'] = details['available_channels']
                 
             if load_error:
                 return record_id, 0, load_error, details
 
-            # Filter to required channels
-            filtered_data, filtered_names = filter_channels(signal_data, channel_names, required_channels)
+            filtered_data, filtered_names = filter_channels(record.signal_data, record.channel_names, required_channels)
             if len(filtered_data) == 0:
                 return record_id, 0, "No required channels found", details
                 
-            # Track which channels are available
-            details['input_channels_available'] = [ch for ch in input_channels if ch in filtered_names]
-            details['output_channels_available'] = [ch for ch in output_channels if ch in filtered_names]
+            details['input_channels_available'] = [ch for ch in config.input_channels if ch in filtered_names]
+            details['output_channels_available'] = [ch for ch in config.output_channels if ch in filtered_names]
             
             if not details['input_channels_available'] or not details['output_channels_available']:
                 return record_id, 0, "Missing input or output channels", details
             
-            # Preprocessing Pipeline
-            long_nan_removal_config = config.get('long_nan_seq_removal', None)
             processed_data_array, logger_infos = perform_signal_processing(
                 filtered_data=filtered_data, 
                 filtered_names=filtered_names, 
-                signal_processing=signal_configs, 
+                signal_processing=config.signal_processing, 
                 start_at_processing_step=start_at_step,
                 process_until_step=until_step,
-                long_nan_removal_config = long_nan_removal_config,
-                metadata=metadata, 
-                logger=logger,  # Pass the logger
+                long_nan_removal_config=config.long_nan_seq_removal,
+                metadata=record.metadata, 
+                logger=logger,
                 records_to_visualize=records_to_visualize
             )        
 
             for logger_info in logger_infos:
                 logger.info(f"{logger_info} record_id={record_id}")
-
-            # Check for NaNs introduced during processing
-            #validation_config = config.get('validation', {})
-            #strict_nan_check = validation_config.get('strict_nan_check', True)
-            #if strict_nan_check:
-            #    for item_dict in processed_data_array:
-            #        for channel_name, data in item_dict.items():
-            #            if np.any(np.isnan(data)):
-            #                nan_diagnostic = analyze_nan_values(data, channel_name)
-            #                return record_id, 0, f"NaN values detected after processing in channel {channel_name}: {nan_diagnostic}", details
             
             if len(processed_data_array) == 0:
                 return record_id, 0, "No valid processed data after preprocessing", details
             
-            # Create windows
-            windowing_config = config.get('windowing', {})
-            if windowing_config != {}:
-                observation_window = windowing_config.get('observation_window', 3600)
-                prediction_horizon = windowing_config.get('prediction_horizon', 300)
-                prediction_window = windowing_config.get('prediction_window', 1800)
-                step = windowing_config.get('step', 300)
-                expected_resolution = windowing_config.get('expected_resolution', 1.0)
+            w = config.windowing
+            if config.signal_processing:
                 windower = create_windower()
                 
                 logger.info(f"Creating windows for record {record_id}")
 
                 windows = windower.create_windows(
                     processed_data_array,
-                    observation_window,
-                    prediction_horizon, 
-                    prediction_window,
-                    step,
-                    expected_resolution
+                    w.observation_window,
+                    w.prediction_horizon, 
+                    w.prediction_window,
+                    w.step,
+                    w.expected_resolution
                 )
                 if record_id in records_to_visualize:
-                    visualize_windowing_for_record(record_id, until_step - 1 , windows, processed_data_array, observation_window, prediction_horizon, prediction_window, step, expected_resolution, output_path=metadata.get("output_path_process_images", "outputs/reports/process_images"))
+                    visualize_windowing_for_record(record_id, until_step - 1, windows, processed_data_array, w.observation_window, w.prediction_horizon, w.prediction_window, w.step, w.expected_resolution, output_path=record.metadata.output_path_process_images)
 
                 if not windows:
                     return record_id, 0, "No valid windows created", details
             
-                        
-                # Save windows
-                filtered_names = [channel_config["channel"] for channel_config in signal_configs]
+                filtered_names = config.channel_names
                 samples_saved = save_windows(windows, filtered_names, record_id, subject_id, 
                                         config, output_manager, logger, row_index)
             else:
@@ -466,29 +261,10 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
         return record_id, 0, error_msg, details
 
 
-def load_record_data_from_split(record_path: str) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[str], List[str], str]:  
-    try:
-        
-        observation_df = pd.from_pickle(Path(record_path))
-        prediction_path = str(Path(record_path).parent.parent / "prediction" / Path(record_path).name)
-        prediction_df = pd.from_pickle(prediction_path)
-
-        observation_found_channels = list(observation_df.columns)
-        prediction_found_channels = list(prediction_df.columns)
-
-        observation_signal_data = observation_df.to_numpy()
-        prediction_signal_data = prediction_df.to_numpy()
-
-        return observation_signal_data, prediction_signal_data, observation_found_channels, prediction_found_channels, ""
-        
-    except Exception as e:
-        return None, None, [], [], f"Load error: {str(e)}"
-
-
-def create_samples_from_record_from_split(split: str, subject: str, start_step: int, end_step: int, config: Dict[str, Any], 
+def create_samples_from_record_from_split(split: str, subject: str, start_step: int, end_step: int, config: PipelineConfig, 
                               output_manager, logger_name: str, subject_index: int, records_to_visualize=[]) -> Tuple[str, int, str, Dict[str, Any]]:
     """
-    Create training samples from a single record.
+    Apply later processing steps to already-split CSV records.
     
     Args:
         logger_name: String name of logger (not Logger object for pickle compatibility)
@@ -496,74 +272,50 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
     Returns:
         Tuple of (record_id, samples_created, status, details)
     """
-
-    # Get logger in worker process
     logger = get_logger(logger_name)
     
     try:
-        # Get configuration
-        input_channels = config.get('input_channels', [])
-        output_channels = config.get('output_channels', [])
-        required_channels = list(set(input_channels + output_channels))
-        
-        signal_configs = config.get('signal_processing', {})
-        
         subject_path = Path(split) / subject / "observation"
-        long_nan_removal_config = config.get('long_nan_seq_removal', None)
 
-        # TODO for now assue that current_sampling_rate is the same for all channels
-
-        config_channel_1 = config.get('signal_processing', {})[0].get("steps", [{}])
-        # remove all steps that are not downsampling or are larger than start_step
-        # sort entries by "step"
+        config_channel_1 = config.signal_processing[0].get("steps", [{}])
         current_fs = [step.get("downsampling").get("desired_resolution", 1.0) for step in config_channel_1 if step.get("step", 0) < start_step and step.get("downsampling", {}) != {}]
-        metadata = {
-            "min_record_duration": config.get('validation', {}).get('min_record_duration', 7200),
-            "sampling_rate": current_fs[-1] if len(current_fs) > 0 else 1.0,
-            "imputer_path": str(Path(config.get("output", {}).get("base_dir","")) / "data" / "iterative_imputer_X.pkl"),
-            "output_path_process_images": str(Path(config.get("output", {}).get("base_dir","")) / "reports" / "process_images"),
-            "windowing_config": config.get('windowing', {})
-            }
+        base_metadata = ProcessingContext(
+            min_record_duration=config.validation.min_record_duration,
+            sampling_rate=current_fs[-1] if len(current_fs) > 0 else 1.0,
+            imputer_path=str(Path(config.output.base_dir) / "data" / "iterative_imputer_X.pkl"),
+            output_path_process_images=str(Path(config.output.base_dir) / "reports" / "process_images"),
+            windowing_config=config.windowing,
+        )
 
-        # read all file_names in subject_path
         record_files = os.listdir(str(subject_path))
         for record_file in record_files:
             record_path = subject_path / record_file
+            prediction_path = str(record_path.parent.parent / "prediction" / record_path.name)
 
-            for type_record_path in [str(record_path), str(Path(record_path).parent.parent / "prediction" / Path(record_path).name)]:
+            for csv_path in [str(record_path), prediction_path]:
+                record_type = "observation" if "observation" in csv_path else "prediction"
+                base_metadata.record_id = f"{record_path.stem}_{record_type}"
 
-                if "observation" in type_record_path:
-                    metadata["record_id"] = str(record_path.stem) + "_observation"
-                else:
-                    metadata["record_id"] = str(record_path.stem) + "_prediction" 
+                loader: RecordLoader = CsvRecordLoader(csv_path, base_metadata)
+                loaded_records, load_error = loader.load()
+                if load_error or not loaded_records:
+                    continue
 
-
-                # Load signal data
-                df = pd.read_csv(type_record_path)
-                found_channels = df.columns
-                signal_data = df.to_numpy()
-    
-                # Preprocessing Pipeline
-                #print("start preprocessing of prediction of record ", metadata["record_id"])
-                #print(signal_data)
-
+                rec = loaded_records[0]
                 processed_data_array, logger_infos = perform_signal_processing(
-                    filtered_data=signal_data, 
-                    filtered_names=found_channels, 
-                    signal_processing=signal_configs, 
+                    filtered_data=rec.signal_data, 
+                    filtered_names=rec.channel_names, 
+                    signal_processing=config.signal_processing, 
                     start_at_processing_step=start_step,
                     process_until_step=end_step,
-                    long_nan_removal_config = long_nan_removal_config,
-                    metadata=metadata, 
-                    logger=logger,  # Pass the logger
+                    long_nan_removal_config=config.long_nan_seq_removal,
+                    metadata=base_metadata, 
+                    logger=logger,
                     records_to_visualize=records_to_visualize
                 )        
 
-                #print("finnish preprocessing of prediction of record ", metadata["record_id"])
-                #print(processed_data_array)
-                processed_data_df = pd.DataFrame(processed_data_array[0])
-                #print(processed_data_df)
-                processed_data_df.to_csv(type_record_path, index=False)
+                processed_data_df = pd.DataFrame(dict(processed_data_array[0]))
+                processed_data_df.to_csv(csv_path, index=False)
         
         return "", 0, "Success", {}
         

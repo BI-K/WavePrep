@@ -20,6 +20,22 @@ from .config import (
     get_default_config_paths
 )
 
+from .signal_data import (
+    SignalData,
+    WindowedData,
+    Window
+)
+
+from .processing_context import ProcessingContext
+
+from .pipeline_config import (
+    PipelineConfig,
+    WindowingConfig,
+    ValidationConfig,
+    OutputConfig,
+    SplittingConfig,
+)
+
 from .script_utils import (
     create_standard_parser,
     load_script_configuration,
@@ -36,6 +52,21 @@ __all__ = [
     'load_configuration',
     'merge_configurations',
     
+    # Signal data classes
+    'SignalData',
+    'WindowedData',
+    'Window',
+
+    # Processing context
+    'ProcessingContext',
+
+    # Pipeline configuration
+    'PipelineConfig',
+    'WindowingConfig',
+    'ValidationConfig',
+    'OutputConfig',
+    'SplittingConfig',
+
     # Configuration utilities
     'ConfigManager',
     'ConfigError',

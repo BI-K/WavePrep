@@ -38,8 +38,8 @@ class HinrichsPaperImputer(AbstractImputer):
                 imputer = joblib.load(path)
 
                 processed_data[channel_name] = channel
-                processed_data_array = np.array(list(processed_data.values())).T
-                imputed_data = imputer.transform(processed_data_array)
+                all_channels = processed_data.to_numpy()
+                imputed_data = imputer.transform(all_channels)
                 channel = imputed_data[:, channel_idx].flatten()
 
         channel = np.array(channel)
