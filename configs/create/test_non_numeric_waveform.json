@@ -45,10 +45,10 @@
 
     "windowing": {
         "expected_resolution": 25,
-        "observation_window": 30,
+        "observation_window": 10,
         "prediction_horizon": 0,
         "prediction_window": 5,
-        "step": 35
+        "step": 15
 
     },
 

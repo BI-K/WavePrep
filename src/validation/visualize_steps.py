@@ -382,6 +382,8 @@ def _visualize_imputing_for_channel_record(fig, axes, fig_zoom, axes_zoom, recor
 
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
+        axes[-1].set_xlabel(f'Time Steps')
+
         return fig, fig_zoom, axes, axes_zoom
 
 
@@ -417,7 +419,8 @@ def _visualize_data_cleaning_for_channel_record(fig, axes, fig_zoom, axes_zoom, 
             _highlight_nan_background(axes_zoom[channel_id * 2 + 1], data_after_zoom)
 
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
-
+            
+        axes[-1].set_xlabel(f'Time Steps')
         return fig, fig_zoom, axes, axes_zoom
 
 
@@ -473,6 +476,8 @@ def _visualize_downsampling_for_channel_record(fig, axes, fig_zoom, axes_zoom, r
 
             axes_zoom = beautify_axes(axes_zoom, channel_id, data_before_zoom, data_after_zoom)
 
+        axes[-1].set_xlabel(f'Time Steps')
+
         return fig, fig_zoom, axes, axes_zoom
 
 
@@ -495,6 +500,8 @@ def _visualize_all_channels_for_record(data_array, number_of_additional_subplots
         _highlight_nan_background(axes[channel_idx], data_array[channel])
         axes[channel_idx].set_ylabel(f'{channel}')
         channel_idx += 1
+
+    axes[-1].set_xlabel(f'Time Steps')
                
     return fig, axes
 
@@ -530,6 +537,8 @@ def visualize_long_nan_removal_for_record( record_id: str, step_id: int, process
                 else:
                     ax.axvspan(start - 0.5, end + 0.5, color='green', alpha=0.5)
 
+    axes[-1].set_xlabel(f'Time Steps')
+
     # fig.suptitle(f"Record: {record_id} - Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
     # fig.suptitle(f"Step: {step_id} Visualization of Long NaN Removal", fontsize=16)
     with _visualization_lock:
@@ -563,10 +572,17 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
         fig, axes = _visualize_all_channels_for_record(snipped_data_array, number_of_additional_subplots=1, image_width=image_width / 2, image_height=image_height)
 
         # only show for a limited number of windows - e.g. 10
-        if step_size <= 0:
-            curr_number_of_windows_to_visualize = 0
+
+        # print(f"zoom_levels[zoom_idx]: {zoom_levels[zoom_idx]}")
+
+        if full_window_size < zoom_levels[zoom_idx]:
+            max_windows_viszualizable = math.floor((zoom_levels[zoom_idx] - full_window_size) / (step_size)) + 1
         else:
-            curr_number_of_windows_to_visualize = min(number_of_windows_to_visualize, int(math.floor((zoom_levels[zoom_idx] - 1) / step_size) + 1))
+            max_windows_viszualizable = 0
+
+        curr_number_of_windows_to_visualize = min(max_windows_viszualizable, number_of_windows_to_visualize)
+        
+        # print(f"curr_number_of_windows_to_visualize: {curr_number_of_windows_to_visualize}")
 
         for i in range(curr_number_of_windows_to_visualize):
 
@@ -579,34 +595,36 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
             obs_end_clip = min(obs_end, zoom_levels[zoom_idx])
             pred_end_clip = min(pred_end, zoom_levels[zoom_idx])
 
+            left_move = 0.5
+
             # observation window - ONLY horizontal bars, NO vertical lines on axes[-1]
             if obs_start < zoom_levels[zoom_idx]:
-                axes[-1].hlines(y=i, xmin=obs_start, xmax=obs_end_clip, color=_window_obs_color, linewidth=3, alpha=0.7)
+                axes[-1].hlines(y=i, xmin=obs_start-left_move, xmax=obs_end_clip-left_move, color=_window_obs_color, linewidth=3, alpha=0.7)
 
             # prediction window - ONLY horizontal bars, NO vertical lines on axes[-1]
             if pred_start < zoom_levels[zoom_idx]:
-                axes[-1].hlines(y=i, xmin=pred_start, xmax=pred_end_clip, color=_window_pred_color, linewidth=3, alpha=0.7)
+                axes[-1].hlines(y=i, xmin=pred_start-left_move, xmax=pred_end_clip-left_move, color=_window_pred_color, linewidth=3, alpha=0.7)
 
             # vertical lines ONLY on channel subplots (axes[:-1])
             for ax in axes[:-1]:
                 if obs_start < zoom_levels[zoom_idx]:
-                    ax.axvline(x=obs_start, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=obs_start-left_move, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
                 if obs_end_clip <= zoom_levels[zoom_idx]:
-                    ax.axvline(x=obs_end, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=obs_end_clip-left_move, color=_window_obs_color, linestyle='-', alpha=0.7, linewidth=0.8)
                 if pred_start < zoom_levels[zoom_idx]:
-                    ax.axvline(x=pred_start, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=pred_start-left_move, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
                 if pred_end_clip <= zoom_levels[zoom_idx]:
-                    ax.axvline(x=pred_end, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
+                    ax.axvline(x=pred_end_clip-left_move, color=_window_pred_color, linestyle='-', alpha=0.7, linewidth=0.8)
 
             y_top = -0.5
             if obs_start < zoom_levels[zoom_idx]:
-                axes[-1].vlines(obs_start, y_top, i, color=_window_obs_color, alpha=0.7, linewidth=0.8)
+                axes[-1].vlines(obs_start-left_move, y_top, i, color=_window_obs_color, alpha=0.7, linewidth=0.8)
             if obs_end_clip <= zoom_levels[zoom_idx]:
-                axes[-1].vlines(obs_end_clip, y_top, i, color=_window_obs_color, alpha=0.7, linewidth=0.8)
+                axes[-1].vlines(obs_end_clip-left_move, y_top, i, color=_window_obs_color, alpha=0.7, linewidth=0.8)
             if pred_start < zoom_levels[zoom_idx]:
-                axes[-1].vlines(pred_start, y_top, i, color=_window_pred_color, alpha=0.7, linewidth=0.8)
+                axes[-1].vlines(pred_start-left_move, y_top, i, color=_window_pred_color, alpha=0.7, linewidth=0.8)
             if pred_end_clip <= zoom_levels[zoom_idx]:
-                axes[-1].vlines(pred_end_clip, y_top, i, color=_window_pred_color, alpha=0.7, linewidth=0.8)
+                axes[-1].vlines(pred_end_clip-left_move, y_top, i, color=_window_pred_color, alpha=0.7, linewidth=0.8)
 
         # configure the window visualization subplot
         if curr_number_of_windows_to_visualize > 0:
@@ -619,6 +637,8 @@ def visualize_windowing_for_record( record_id: str, step_id: int, windows, proce
             #axes_subplots = gs_subplots.subplots(sharex=False, sharey=True)
             #axes_subplots[0].plot(windows[i]['observation_window'], label='Observation Window', alpha=0.7, color='blue')
             #axes_subplots[1].plot(windows[i]['prediction_window'], label='Prediction Window', alpha=0.7, color='red')
+
+        axes[-1].set_xlabel(f'Time Steps')
             
         if zoom_idx == 0:
             # fig.suptitle(f"Record: {record_id} - Step: {step_id} - windowing - {observation_window} - {prediction_horizon} - {prediction_window}", fontsize=16)
