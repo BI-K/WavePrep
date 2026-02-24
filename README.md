@@ -9,7 +9,7 @@ To use WavePrep, the user has to provide two input files. Firstly, a CSV file sp
 WavePrep is a modular framework, developed in Python 3.12.3. The processing steps are divided into: down-sampling, data cleaning, imputation, and windowing. These step categories are implemented as abstract classes, enabling researchers to extend the framework with specific implementations of these steps. Records are processed in parallel.
 
 
-For now WavePrep was developed to work with the [MIMIC III matched waveform v1.0 datset](https://physionet.org/content/mimic3wdb-matched/1.0/). The dataset consists of 10,282 Patients and 22,247 numeric records. Only 10,269 patients have at least one numeric record.
+For now WavePrep was developed to work with the [MIMIC III matched waveform v1.0 datset](https://physionet.org/content/mimic3wdb-matched/1.0/). The dataset consists of 10,282 Patients and 22,247 numeric records. Only 10,269 patients have at least one numeric record. Compatibility has been tested for the "numeric" and "non-numeric" records.
 
 ## How to install
 
@@ -205,6 +205,10 @@ python scripts/create_dataset.py --config configs/create/default.json
 ## 4) Output of WavePrep
 
 ![Resulting folder structure of WavePrep](./img/output.png)
+Alongside the processed data, a visual report of the processing steps applied to the chosen records will be craeted for 20 randomly chosen samples. You can find it in ```./outputs/you_project_name>/reports/process_images/``` they are named after the record visualized.
+You can see and example below:
+![Visual Report of processing pipeline from ./configs/create/test_step_1.json p000439-2104-10-26-20-29n](./img/merged_visualization_record_p000439-2104-10-26-20-29n_1.png)
+![](./img/merged_visualization_record_p000439-2104-10-26-20-29n_2.png)
 
 
 ## Further notes
@@ -214,4 +218,9 @@ The create dataset script will use the ThreadPoolExecutor to parallelize the cre
 Each create script run will create a new folder in the `outputs/` directory with the name of the current datetime. The folder will contain analysis, reports, logs, and mainly data folder which will have like folder names with the subject ID and the generated csv files using the records in the subject ID folder.
 
 Splitting takes place by taking the subject IDs from the outputs/create/latest/data/ folder and then splitting them into train, validation, and test sets. The split is done using a "group shuffle" approach, which means that all records belonging to a single subject (group) are kept together in the same split (train, validation, or test). This ensures that the records of a subject are not divided across different sets, preventing data leakage between splits. For more information on group shuffle, see [GroupShuffleSplit in scikit-learn](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupShuffleSplit.html).
+
+
+## Further Documentation
+
+The poster presented at Biosignals Wprkshop 2026 in Innsbruck can be found in the [here](./doc/Workshop_Biosignals_2026_WavePrep_Poster_v1.1.pdf).
 
