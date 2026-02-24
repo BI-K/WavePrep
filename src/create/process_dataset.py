@@ -8,23 +8,19 @@ import logging
 import urllib3
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from datetime import datetime
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor 
 import logging.handlers
 import queue
 import threading
-import os
-import pandas as pd
-import numpy as np
 import torch
 import argparse
 import sys
 
-
+from common.pipeline_config import PipelineConfig
 from create.process_record import create_samples_from_record_from_wfdb, create_samples_from_record_from_split, extract_record_id
-from split.mimic_splitter import run_dataset_splitting
+from split.mimic_splitter import run_dataset_splitting, create_output_directory
 
 from preprocessing.windowing import create_windower
 from preprocessing.signal_processing import perform_signal_processing
@@ -32,8 +28,7 @@ from preprocessing.imputing import is_imputer_that_needs_split
 from preprocessing.imputing import train_and_save_imputer
 
 from validation.validation import validate_record, generate_detailed_analysis, analyze_nan_values, save_reports
-
-
+from validation import initialize_visualization, merge_step_visualizations_for_record
 
 # Worker process initialization function
 def worker_init(log_file_path=None):
@@ -63,18 +58,17 @@ def worker_init_shared():
     pass
 
 
-def load_record_list(config: Dict[str, Any], logger) -> pd.DataFrame:
+def load_record_list(config: PipelineConfig, logger) -> pd.DataFrame:
     """Load record list from input file."""
 
         
-    records_file = Path(config.get('record_list_file', 'inputs/record_list.txt'))
+    records_file = Path(config.record_list_file)
     logger.info("Loading test record list")
             
     if not records_file.exists():
         raise FileNotFoundError(f"Records file not found: {records_file}")
 
     records_df = pd.read_csv(records_file)
-    print(records_df.head())
     records_df["subject_id"] = records_df["record"].apply(lambda x: x.split('-')[0])
     records_df["subject_dir"] = records_df["subject_id"].apply(lambda x: f"p{x[1:3]}")
     records_df["full_path"] = records_df.apply(lambda x: f"{x['subject_dir']}/{x['subject_id']}/{x['record']}", axis=1)
@@ -82,10 +76,9 @@ def load_record_list(config: Dict[str, Any], logger) -> pd.DataFrame:
     return records_df
 
 
-def check_if_imputer_needs_to_be_trained(config: Dict[str, Any]) -> bool:
+def check_if_imputer_needs_to_be_trained(config: PipelineConfig) -> bool:
     """Check if any imputer in the configuration needs to be trained."""
-    signal_configs = config.get('signal_processing', {})
-    for channel_config in signal_configs:
+    for channel_config in config.signal_processing:
         steps = channel_config.get('steps', [])
         for step_config in steps:
             to_imputation = step_config.get("imputation", {})
@@ -93,13 +86,12 @@ def check_if_imputer_needs_to_be_trained(config: Dict[str, Any]) -> bool:
                 return True
     return False
 
-def get_step_for_windowing_and_split(config: Dict[str, Any]) -> Tuple[int, int, int]:
+def get_step_for_windowing_and_split(config: PipelineConfig) -> Tuple[int, int, int]:
     """Get start and stop processing steps for intermediate window creation."""
-    signal_configs = config.get('signal_processing', {})
-    max_steps = max(len(channel_config.get('steps', [])) for channel_config in signal_configs)
+    max_steps = max(len(channel_config.get('steps', [])) for channel_config in config.signal_processing)
 
     if check_if_imputer_needs_to_be_trained(config):
-        for channel_config in signal_configs:
+        for channel_config in config.signal_processing:
             steps = channel_config.get('steps', [])
             for step_idx in range(len(steps)):
                 to_imputation = steps[step_idx].get("imputation", {})
@@ -109,8 +101,8 @@ def get_step_for_windowing_and_split(config: Dict[str, Any]) -> Tuple[int, int, 
     return 0, max_steps, max_steps
 
 
-def process_records_parallel_wfdb(records_df: pd.DataFrame, config: Dict[str, Any], start_step: int, end_step: int, max_workers: int,
-                           output_manager, logger, log_file_path=None) -> List[Tuple[str, int, str, Dict[str, Any]]]:
+def process_records_parallel_wfdb(records_df: pd.DataFrame, config: PipelineConfig, start_step: int, end_step: int, max_workers: int,
+                           output_manager, logger, log_file_path=None, records_to_visualize = []) -> List[Tuple[str, int, str, Dict[str, Any]]]:
     """Process multiple records in parallel."""
     
     logger.info(f"Starting parallel processing with {max_workers} workers")
@@ -125,7 +117,7 @@ def process_records_parallel_wfdb(records_df: pd.DataFrame, config: Dict[str, An
 
         process_args = [
                 (row['full_path'], row["offset_start_seconds"], row["offset_end_seconds"], start_step, end_step,
-                config, output_manager, logger_name, idx)
+                config, output_manager, logger_name, idx, records_to_visualize)
                 for idx, row in records_df.iterrows()
         ]
             
@@ -152,13 +144,13 @@ def process_records_parallel_wfdb(records_df: pd.DataFrame, config: Dict[str, An
     return results
 
 
-def process_records_parallel_split(config: Dict[str, Any], start_step: int, end_step: int, max_workers: int,
-                           output_manager, logger, log_file_path=None) -> List[Tuple[str, int, str, Dict[str, Any]]]:
+def process_records_parallel_split(config: PipelineConfig, start_step: int, end_step: int, max_workers: int,
+                           output_manager, logger, log_file_path=None, records_to_visualize=[]) -> List[Tuple[str, int, str, Dict[str, Any]]]:
     """Process multiple records in parallel."""
     
     logger.info(f"Starting parallel processing with {max_workers} workers")
 
-    path = config.get("output", {}).get("base_dir", "outputs")
+    path = config.output.base_dir
 
     for split_type in ["train", "test", "validation"]:
         print(f"Processing split: {split_type}")
@@ -177,7 +169,7 @@ def process_records_parallel_split(config: Dict[str, Any], start_step: int, end_
 
             process_args = [
                     (split_path, subject, start_step, end_step,
-                    config, output_manager, logger_name, idx)
+                    config, output_manager, logger_name, idx, records_to_visualize)
                     for idx, subject in enumerate(split_subjects)
             ]
                 
@@ -204,20 +196,20 @@ def process_records_parallel_split(config: Dict[str, Any], start_step: int, end_
     return results
 
 
-def split_dataset(config: Dict[str, Any], output_manager, logger) -> Dict[str, Any]:
+def split_dataset(config: PipelineConfig, output_manager, logger) -> Dict[str, Any]:
 
     # Log splitting parameters
-    train_ratio = config.get("train_ratio", 0.7)
-    validation_ratio = config.get("validation_ratio", 0.1)
-    test_ratio = config.get("test_ratio", 0.2)
+    train_ratio = config.splitting.train_ratio
+    validation_ratio = config.splitting.validation_ratio
+    test_ratio = config.splitting.test_ratio
 
     total_ratio = train_ratio + validation_ratio + test_ratio
-    if abs(total_ratio - 1.0) > 0.001:  # Allow for small floating point errors
+    if abs(total_ratio - 1.0) > 0.001:
             raise ValueError(f"Split ratios must sum to 1.0, got {total_ratio}")
         
     # Log subject filtering if configured
-    exclude_subjects = config.get("exclude_subjects", [])
-    include_only_subjects = config.get("include_only_subjects", [])
+    exclude_subjects = config.splitting.exclude_subjects
+    include_only_subjects = config.splitting.include_only_subjects
         
     if exclude_subjects:
         logger.info(f"Excluding {len(exclude_subjects)} subjects")
@@ -250,16 +242,15 @@ def create_dataset_pt(path: str, is_train: bool):
     labels = []
 
     if is_train:
-        path += '/train'
+        path = os.path.join(path, 'train')
     else:
-        path += '/test'
-    
-    print("Creating pt-dataset from path: ", path)
+        path = os.path.join(path, 'test')
     # read all folders in the path
     folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f))]
     
     # Parallelize folder processing using ThreadPoolExecutor (I/O-bound task)
     max_workers = min(os.cpu_count() or 1, len(folders))  # Don't spawn more workers than folders
+    # max_workers = 1
     print(f"Processing {len(folders)} folders with {max_workers} workers")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(create_dataset_pt_process_folder, path, folder) for folder in folders]
@@ -276,12 +267,12 @@ def create_dataset_pt(path: str, is_train: bool):
 
 
 
-def train_imputer(config: Dict[str, Any], output_manager, logger):
+def train_imputer(config: PipelineConfig, output_manager, logger):
     """Train and save imputer if required."""
     logger.info("Training imputer as per configuration")
 
-    output_path = config.get("output", {}).get("base_dir", "outputs")
-    output_path += "/data"
+    output_path = Path(config.output.base_dir)
+    output_path = os.path.join(output_path, "data")
     
     train_samples = create_dataset_pt(path=output_path, is_train=True)
 
@@ -298,123 +289,75 @@ def train_imputer(config: Dict[str, Any], output_manager, logger):
 
 
 # In run_dataset_creation, replace the ProcessPoolExecutor section:
-def run_dataset_creation(config: Dict[str, Any], output_manager, logger, log_file_path=None):
+def _log_phase_completion(logger, phase_name: str, start_time: float):
+    """Log the completion of a pipeline phase with formatted runtime."""
+    elapsed = time.time() - start_time
+    hours = int(elapsed // 3600)
+    minutes = int((elapsed % 3600) // 60)
+    seconds = elapsed % 60
+    logger.info("=" * 60)
+    logger.info(f"{phase_name}")
+    logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({elapsed:.2f} seconds)")
+    logger.info("=" * 60)
+
+
+def run_dataset_creation(config: PipelineConfig, output_manager, logger, log_file_path=None):
     """Run the complete dataset creation process."""
     logger.info("Starting dataset creation")
     
-    # Log configuration
-    input_channels = config.get('input_channels', [])
-    output_channels = config.get('output_channels', [])
-    signal_config = config.get('signal_processing', [])
-    windowing_config = config.get('windowing', {})
+    w = config.windowing
     
-    logger.info(f"Input channels: {input_channels}")
-    logger.info(f"Output channels: {output_channels}")
-    logger.info(f"Windows: obs={windowing_config.get('observation_window')}s, "
-               f"horizon={windowing_config.get('prediction_horizon')}s, "
-               f"pred={windowing_config.get('prediction_window')}s")
+    logger.info(f"Input channels: {config.input_channels}")
+    logger.info(f"Output channels: {config.output_channels}")
+    logger.info(f"Windows: obs={w.observation_window}s, "
+               f"horizon={w.prediction_horizon}s, "
+               f"pred={w.prediction_window}s")
     
     start_time = time.time()
-    
+
     try:
-        # Load record list
         records_df = load_record_list(config, logger)
+
+        create_output_directory(config, logger)
+        records_to_visualize = initialize_visualization(records_df['record'].tolist(), config)
         
-        # Process records with log file path
-        max_workers = os.cpu_count() or 1  # Use all available CPU cores, fallback to 8
+        max_workers = os.cpu_count() or 1
         logger.info(f"Processing {len(records_df)} records with {max_workers} workers")
 
         start_step, end_step, max_steps = get_step_for_windowing_and_split(config)
-        print(f"Windowing and split between steps {start_step} and {end_step}")
 
-        
+        results = process_records_parallel_wfdb(records_df, config, start_step, end_step, 
+                                                max_workers, output_manager, logger, log_file_path, records_to_visualize)
+        _log_phase_completion(logger, "FIRST SIGNAL PROCESSING COMPLETED", start_time)
 
-        # processing before windowing and split
-        results = process_records_parallel_wfdb(records_df, config, start_step, end_step, max_workers, output_manager, logger, log_file_path)
-        # Calculate metrics
-        processing_time = time.time() - start_time
-        successful_records = [r for r in results if r[1] > 0]
-        total_samples = sum(r[1] for r in results)
-        
-        # Log runtime in multiple formats
-        hours = int(processing_time // 3600)
-        minutes = int((processing_time % 3600) // 60)
-        seconds = processing_time % 60
-        
-        logger.info("="*60)
-        logger.info(f"FIRST SIGNAL PROCESSING COMPLETED")
-        logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
-        logger.info("="*60)
-
-        # split
         split_results = split_dataset(config, output_manager, logger)
-        # Calculate metrics
-        processing_time = time.time() - start_time
-        successful_records = [r for r in results if r[1] > 0]
-        total_samples = sum(r[1] for r in results)
-        
-        # Log runtime in multiple formats
-        hours = int(processing_time // 3600)
-        minutes = int((processing_time % 3600) // 60)
-        seconds = processing_time % 60
-        
-        logger.info("="*60)
-        logger.info(f"SPLIT COMPLETED")
-        logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
-        logger.info("="*60)
+        _log_phase_completion(logger, "SPLIT COMPLETED", start_time)
 
-        # if imputer should be trained
         if end_step < max_steps:
             if check_if_imputer_needs_to_be_trained(config):
                 train_imputer(config, output_manager, logger)
 
-            
         if max_steps > end_step:
-            # another round of processing, but load data from disc instead of wfdb
-            print("Processing records after split and before windowing")
-            results = process_records_parallel_split(config, end_step, max_steps, max_workers, output_manager, logger, log_file_path)
+            results = process_records_parallel_split(config, end_step, max_steps, max_workers, output_manager, logger, log_file_path, records_to_visualize)
+            _log_phase_completion(logger, "SECOND SIGNAL PROCESSING COMPLETED", start_time)
 
-            # Calculate metrics
-            processing_time = time.time() - start_time
-            successful_records = [r for r in results if r[1] > 0]
-            total_samples = sum(r[1] for r in results)
-            
-            # Log runtime in multiple formats
-            hours = int(processing_time // 3600)
-            minutes = int((processing_time % 3600) // 60)
-            seconds = processing_time % 60
-            
-            logger.info("="*60)
-            logger.info(f"SECOND SIGNAL PROCESSING COMPLETED")
-            logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
-            logger.info("="*60)
+        _log_phase_completion(logger, "DATASET CREATION COMPLETED", start_time)
+        
+        output_path = Path(config.output.base_dir)
+        output_path = output_path / "reports" / "process_images"
+        for record in records_to_visualize:
+            match = records_df[records_df["record"] == record].head(1)
 
-        # Calculate metrics
-        processing_time = time.time() - start_time
-        successful_records = [r for r in results if r[1] > 0]
-        total_samples = sum(r[1] for r in results)
-        
-        # Log runtime in multiple formats
-        hours = int(processing_time // 3600)
-        minutes = int((processing_time % 3600) // 60)
-        seconds = processing_time % 60
-        
-        logger.info("="*60)
-        logger.info(f"DATASET CREATION COMPLETED")
-        logger.info(f"Total Runtime: {hours:02d}:{minutes:02d}:{seconds:06.3f} ({processing_time:.2f} seconds)")
-        logger.info("="*60)
-        
+            if not match.empty:
+                start_offset_seconds = float(match["offset_start_seconds"].iloc[0])
+                end_offset_seconds = float(match["offset_end_seconds"].iloc[0])
+                
+                merge_step_visualizations_for_record(record, start_offset_seconds, end_offset_seconds, signal_processing_config=config.signal_processing, output_path=output_path, windowing_config=config.windowing)
+
         # TODO fix Save reports
         # save_reports(results, processing_time, config, output_manager, logger)
         
         logger.info("Dataset creation completed successfully")
-
-        # for me
-        output_path = config.get("output", {}).get("base_dir", "outputs")
-        output_path += "/data"
-    
-        #train_dict = create_dataset_pt(path=output_path, is_train=True)
-        #test_dict = create_dataset_pt(path=output_path, is_train=False)
         
     except Exception as e:
         logger.error(f"Dataset creation failed: {e}")

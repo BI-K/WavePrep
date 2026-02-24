@@ -25,7 +25,7 @@ class HinrichsPaperImputer(AbstractImputer):
                         i += 1
                     end = i
                     gap = end - start
-                    channel[start:start + 3] = channel[start - 1]
+                    channel[start:start + min(gap, 3) ] = channel[start - 1]
                 else:
                     i += 1
 
@@ -38,13 +38,38 @@ class HinrichsPaperImputer(AbstractImputer):
                 imputer = joblib.load(path)
 
                 processed_data[channel_name] = channel
-                processed_data_array = np.array(list(processed_data.values())).T
-                imputed_data = imputer.transform(processed_data_array)
+                all_channels = processed_data.to_numpy()
+                imputed_data = imputer.transform(all_channels)
                 channel = imputed_data[:, channel_idx].flatten()
 
+        channel = np.array(channel)
         return channel
 
 
+class ForwardFillImputer(AbstractImputer):
+
+    def impute(self, processed_data, channel_name, path) -> np.ndarray:
+
+        channel = processed_data[channel_name].copy()
+        if np.any(np.isnan(channel)):
+            isnan = np.isnan(channel)
+            n = len(channel)
+
+            # Forward-fill up to 3 consecutive missing values
+            i = 0
+            while i < n:
+                if isnan[i]:
+                    # Start of missing block
+                    start = i
+                    while i < n and isnan[i]:
+                        i += 1
+                    end = i
+                    gap = end - start
+                    channel[start:start + 3] = channel[start - 1]
+                else:
+                    i += 1
+
+        return channel
     
 
 def is_imputer_that_needs_split(imputer_name: str) -> bool:
@@ -62,6 +87,8 @@ def create_imputer(method: str = 'hinrichs_paper') -> AbstractImputer:
     """
     if method == 'hinrichs_paper':
         return HinrichsPaperImputer()
+    elif method == 'forward_fill':
+        return ForwardFillImputer()
     else:
         raise ValueError(f"Unknown imputation method: {method}")
 

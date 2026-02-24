@@ -11,6 +11,14 @@ WavePrep is a modular framework, developed in Python 3.12.3. The processing step
 
 For now WavePrep was developed to work with the [MIMIC III matched waveform v1.0 datset](https://physionet.org/content/mimic3wdb-matched/1.0/). The dataset consists of 10,282 Patients and 22,247 numeric records. Only 10,269 patients have at least one numeric record.
 
+## How to install
+
+Python Version: 3.12.5
+
+Install requirements with
+````python -m pip install -r requirements.txt```
+To install PyTorch follow the instructions on: [https://pytorch.org/get-started/locally/[(https://pytorch.org/get-started/locally/)]
+
 ## How to WavePrep?
 
 ## 1) Provide a .csv-file that conains the records_id, start_offset and end_offest of the recording time of each record you want to create a dataset of

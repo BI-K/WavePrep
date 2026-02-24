@@ -18,7 +18,7 @@
         "steps":[{
             "step": 0,
             "downsampling":{
-                "desired_resolution": 0.0166666666667,
+                "desired_resolution": 0.00333333333333,
                 "downsampling_strategy": "median"
             },
             "data_cleaning": {},
@@ -35,27 +35,18 @@
         },
         {
             "step": 2,
-            "downsampling":{},
+            "downsampling": {},
             "data_cleaning": {},
             "imputation": {
                 "method": "hinrichs_paper"
             }
-        },
-        {
-            "step": 3,
-            "downsampling":{
-                "desired_resolution": 0.00333333333333,
-                "downsampling_strategy": "median"
-            },
-            "data_cleaning": {},
-            "imputation": {}
         }
     ]},
     {"channel" : "HR",
         "steps":[{
             "step": 0,
             "downsampling":{
-                "desired_resolution": 0.0166666666667,
+                "desired_resolution": 0.00333333333333,
                 "downsampling_strategy": "median"
             },
             "data_cleaning": {},
@@ -72,28 +63,20 @@
         },
         {
             "step": 2,
-            "downsampling":{},
+            "downsampling": {},
             "data_cleaning": {},
             "imputation": {
                 "method": "hinrichs_paper"
             }
-        },
-        {
-            "step": 3,
-            "downsampling":{
-                "desired_resolution": 0.00333333333333,
-                "downsampling_strategy": "median"
-            },
-            "data_cleaning": {},
-            "imputation": {}
-        }]
+        }
+    ]
         },
 
         {"channel" : "SpO2",
         "steps":[{
             "step": 0,
             "downsampling":{
-                "desired_resolution": 0.0166666666667,
+                "desired_resolution": 0.00333333333333,
                 "downsampling_strategy": "median"
             },
             "data_cleaning": {},
@@ -110,20 +93,11 @@
         },
         {
             "step": 2,
-            "downsampling":{},
+            "downsampling": {},
             "data_cleaning": {},
             "imputation": {
                 "method": "hinrichs_paper"
             }
-        },
-        {
-            "step": 3,
-            "downsampling":{
-                "desired_resolution": 0.00333333333333,
-                "downsampling_strategy": "median"
-            },
-            "data_cleaning": {},
-            "imputation": {}
         }]
         }
     ],
@@ -136,13 +110,15 @@
     ],
 
     "windowing": {
-        "expected_resolution": 0.0166666666667,
+        "expected_resolution": 0.00333333333333,
         "observation_window": 3600,
         "prediction_horizon": 0,
         "prediction_window": 300,
         "step": 3900
 
     },
+
+
 
     "validation": {
         "min_record_duration": 3900,
@@ -171,7 +147,6 @@
             "analysis",
             "splits"
         ],
-        "save_format": "pkl",
         "include_metadata": true
     }
 }

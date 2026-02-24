@@ -15,7 +15,9 @@ import logging.handlers
 import queue
 import threading
 
-def validate_record(record_path: str, config: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+from common.pipeline_config import PipelineConfig
+
+def validate_record(record_path: str, config: PipelineConfig) -> Tuple[bool, str, Dict[str, Any]]:
     """
     Validate a single record for dataset creation.
     
@@ -23,26 +25,18 @@ def validate_record(record_path: str, config: Dict[str, Any]) -> Tuple[bool, str
         Tuple of (is_valid, error_message, metadata)
     """
     try:
-        database_name = config.get('database_name', 'mimic3wdb-matched/1.0')
-        validation_config = config.get('validation', {})
-        min_duration = validation_config.get('min_record_duration', 7200)
-        validate_channels = validation_config.get('validate_channels', True)
+        database_name = config.database_name
+        min_duration = config.validation.min_record_duration
+        validate_channels = config.validation.validate_channels
         
-        # Required channels
-        input_channels = config.get('input_channels', [])
-        output_channels = config.get('output_channels', [])
-        required_channels = list(set(input_channels + output_channels))
+        required_channels = config.required_channels
         
-        # Extract directory and record name for wfdb
         path_parts = record_path.split('/')
         directory = f"{database_name}/{'/'.join(path_parts[:-1])}"
         record_name = path_parts[-1]
         
-        # Read header only for efficiency
         header = wfdb.rdheader(record_name, pn_dir=directory)
         
-        
-        # Check channels if validation enabled
         available_channels = header.sig_name
         if validate_channels and required_channels:
             missing_channels = [ch for ch in required_channels if ch not in available_channels]
@@ -62,16 +56,13 @@ def validate_record(record_path: str, config: Dict[str, Any]) -> Tuple[bool, str
     
 
 def generate_detailed_analysis(results: List[Tuple[str, int, str, Dict[str, Any]]], 
-                             config: Dict[str, Any]) -> Dict[str, Any]:
+                             config: PipelineConfig) -> Dict[str, Any]:
     """Generate comprehensive analysis of processing results."""
     total_records = len(results)
     successful_records = [r for r in results if r[1] > 0]
     failed_records = [r for r in results if r[1] == 0]
     
     total_samples = sum(r[1] for r in results)
-    
-    input_channels = config.get('input_channels', [])
-    output_channels = config.get('output_channels', [])
     
     # Basic statistics
     analysis = {
@@ -86,8 +77,8 @@ def generate_detailed_analysis(results: List[Tuple[str, int, str, Dict[str, Any]
         'record_details': {},
         'failure_analysis': {},
         'channel_analysis': {
-            'requested_input_channels': input_channels,
-            'requested_output_channels': output_channels
+            'requested_input_channels': config.input_channels,
+            'requested_output_channels': config.output_channels
         }
     }
     
@@ -159,7 +150,7 @@ def generate_detailed_analysis(results: List[Tuple[str, int, str, Dict[str, Any]
 
 
 def generate_markdown_report(results: List[Tuple[str, int, str, Dict[str, Any]]], 
-                           processing_time: float, config: Dict[str, Any]) -> str:
+                           processing_time: float, config: PipelineConfig) -> str:
     """Generate markdown report content."""
     successful_records = [r for r in results if r[1] > 0]
     failed_records = [r for r in results if r[1] == 0]
@@ -175,19 +166,8 @@ def generate_markdown_report(results: List[Tuple[str, int, str, Dict[str, Any]]]
     else:
         min_samples = max_samples = avg_samples = median_samples = 0
     
-    # Get configuration
-    input_channels = config.get('input_channels', [])
-    output_channels = config.get('output_channels', [])
-    
-    windowing_config = config.get('windowing', {})
-    observation_window = windowing_config.get('observation_window', 3600)
-    prediction_horizon = windowing_config.get('prediction_horizon', 300)
-    prediction_window = windowing_config.get('prediction_window', 1800)
-    step = windowing_config.get('step', 300)
-    target_fs = windowing_config.get('expected_resolution', 1.0)
-    
-    validation_config = config.get('validation', {})
-    min_duration = validation_config.get('min_record_duration', 7200)
+    w = config.windowing
+    min_duration = config.validation.min_record_duration
     
     report_lines = [
         "# Dataset Creation Report",
@@ -269,13 +249,13 @@ def generate_markdown_report(results: List[Tuple[str, int, str, Dict[str, Any]]]
     # Add configuration summary
     report_lines.extend([
         "## Configuration Summary",
-        f"- **Input Channels**: {', '.join(input_channels)}",
-        f"- **Output Channels**: {', '.join(output_channels)}",
-        f"- **Target Sampling Rate**: {target_fs} Hz",
-        f"- **Observation Window**: {observation_window} seconds",
-        f"- **Prediction Horizon**: {prediction_horizon} seconds", 
-        f"- **Prediction Window**: {prediction_window} seconds",
-        f"- **Step Size**: {step} seconds",
+        f"- **Input Channels**: {', '.join(config.input_channels)}",
+        f"- **Output Channels**: {', '.join(config.output_channels)}",
+        f"- **Target Sampling Rate**: {w.expected_resolution} Hz",
+        f"- **Observation Window**: {w.observation_window} seconds",
+        f"- **Prediction Horizon**: {w.prediction_horizon} seconds", 
+        f"- **Prediction Window**: {w.prediction_window} seconds",
+        f"- **Step Size**: {w.step} seconds",
         f"- **Minimum Record Duration**: {min_duration} seconds",
         ""
     ])
@@ -284,7 +264,7 @@ def generate_markdown_report(results: List[Tuple[str, int, str, Dict[str, Any]]]
 
 
 def save_reports(results: List[Tuple[str, int, str, Dict[str, Any]]], 
-                processing_time: float, config: Dict[str, Any], 
+                processing_time: float, config: PipelineConfig, 
                 output_manager, logger):
     """Save comprehensive reports and analysis."""
     try:

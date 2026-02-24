@@ -14,14 +14,15 @@ import logging
 # Add the src directory to the Python path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from create.procress_dataset import run_dataset_creation
+from create.process_dataset import run_dataset_creation
 
 from common import (
     create_standard_parser,
     load_script_configuration,
     setup_script_environment,
     validate_required_config,
-    ConfigError
+    ConfigError,
+    PipelineConfig,
 )
 
 def configure_root_logger(level=logging.INFO, log_file=None):
@@ -86,10 +87,10 @@ def main() -> int:
         ]
         validate_required_config(config, required_keys, logger)
         
+        pipeline_config = PipelineConfig.from_dict(config)
+
         # Run dataset creation with log file path
-        run_dataset_creation(config, output_manager, logger, log_file)
-        
-        return 0
+        run_dataset_creation(pipeline_config, output_manager, logger, log_file)
         
     except ConfigError as e:
         if logger:
