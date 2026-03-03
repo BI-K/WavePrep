@@ -282,8 +282,8 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
     try:
         subject_path = Path(split) / subject / "observation"
 
-        config_channel_1 = config.signal_processing[0].get("steps", [{}])
-        current_fs = [step.get("downsampling").get("desired_resolution", 1.0) for step in config_channel_1 if step.get("step", 0) < start_step and step.get("downsampling", {}) != {}]
+        config_channel_1 = config.signal_processing[0].steps
+        current_fs = [s.downsampling.desired_resolution for s in config_channel_1 if s.step < start_step and s.downsampling]
         base_metadata = ProcessingContext(
             min_record_duration=config.validation.min_record_duration,
             sampling_rate=current_fs[-1] if len(current_fs) > 0 else 1.0,

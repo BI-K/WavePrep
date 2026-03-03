@@ -715,16 +715,15 @@ def visualize_step_for_record( record_id: str, step_id: int, processed_data_arra
                 # can be different for each channel
                 # so we need to crete a dict of step types for each channel
                 # TODO create a class for reading from config
-                channel_config = next((item for item in signal_processing_config if item.get('channel') == channel), None)
-                channel_steps = channel_config.get('steps', [])
-                current_step = next((step for step in channel_steps if step.get('step') == step_id), None)
+                channel_config = next((item for item in signal_processing_config if item.channel == channel), None)
+                current_step = next((step for step in channel_config.steps if step.step == step_id), None)
 
                 # overwriting is on purpose
-                if current_step.get("downsampling", {}) != {}:
+                if current_step.downsampling:
                     step_type = 'downsampling'
-                if current_step.get("data_cleaning", {}) != {}:
+                if current_step.data_cleaning:
                     step_type = 'data_cleaning'
-                if current_step.get("imputation", {}) != {}:
+                if current_step.imputation:
                     step_type = 'imputation'
                 
 
@@ -802,9 +801,8 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
 
         expected_last_step = -1
         for ch_cfg in signal_processing_config:
-            for s in ch_cfg.get("steps", []):
-                if isinstance(s.get("step", None), int):
-                    expected_last_step = max(expected_last_step, s["step"])
+            for s in ch_cfg.steps:
+                expected_last_step = max(expected_last_step, s.step)
 
         observed_steps_int = [int(s) for s in visualized_steps] if len(visualized_steps) > 0 else []
         record_excluded = (expected_last_step >= 0 and expected_last_step not in observed_steps_int)
@@ -890,14 +888,13 @@ def merge_step_visualizations_for_record(record_id, start_offset_seconds, end_of
                         # Infer type from config
                         found_type = "Processing"
                         for ch_cfg in signal_processing_config:
-                            steps = ch_cfg.get("steps", [])
-                            s_cfg = next((s for s in steps if s.get("step") == current_step_id), None)
+                            s_cfg = next((s for s in ch_cfg.steps if s.step == current_step_id), None)
                             if s_cfg:
-                                if s_cfg.get("downsampling"):
+                                if s_cfg.downsampling:
                                     found_type = "Downsampling"
-                                elif s_cfg.get("data_cleaning"):
+                                elif s_cfg.data_cleaning:
                                     found_type = "Data Cleaning"
-                                elif s_cfg.get("imputation"):
+                                elif s_cfg.imputation:
                                     found_type = "Imputation"
                                 break
                         row_title += f" -> {found_type}"

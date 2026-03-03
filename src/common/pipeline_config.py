@@ -85,24 +85,91 @@ class SplittingConfig:
 
 
 @dataclass
+class DownsamplingStepConfig:
+    desired_resolution: float = 1.0
+    strategy: str = 'decimate'
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> Optional['DownsamplingStepConfig']:
+        if not d:
+            return None
+        return cls(
+            desired_resolution=d.get('desired_resolution', 1.0),
+            strategy=d.get('downsampling_strategy', 'decimate'),
+        )
+
+
+@dataclass
+class DataCleaningStepConfig:
+    lower_threshold: Optional[float] = None
+    upper_threshold: Optional[float] = None
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> Optional['DataCleaningStepConfig']:
+        if not d:
+            return None
+        return cls(
+            lower_threshold=d.get('lower_threshold'),
+            upper_threshold=d.get('upper_threshold'),
+        )
+
+
+@dataclass
+class ImputationStepConfig:
+    method: str = 'mean'
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> Optional['ImputationStepConfig']:
+        if not d:
+            return None
+        return cls(method=d.get('method', 'mean'))
+
+
+@dataclass
+class ProcessingStepConfig:
+    step: int = 0
+    downsampling: Optional[DownsamplingStepConfig] = None
+    data_cleaning: Optional[DataCleaningStepConfig] = None
+    imputation: Optional[ImputationStepConfig] = None
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> 'ProcessingStepConfig':
+        return cls(
+            step=d.get('step', 0),
+            downsampling=DownsamplingStepConfig.from_dict(d.get('downsampling', {})),
+            data_cleaning=DataCleaningStepConfig.from_dict(d.get('data_cleaning', {})),
+            imputation=ImputationStepConfig.from_dict(d.get('imputation', {})),
+        )
+
+
+@dataclass
+class ChannelProcessingConfig:
+    channel: str = ''
+    steps: List[ProcessingStepConfig] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> 'ChannelProcessingConfig':
+        return cls(
+            channel=d.get('channel', ''),
+            steps=[ProcessingStepConfig.from_dict(s) for s in d.get('steps', [])],
+        )
+
+
+@dataclass
 class PipelineConfig:
     """Central configuration for the dataset processing pipeline.
 
     Created once from the merged JSON config dict and passed through the
-    entire pipeline. Nested dataclasses provide typed access to every
+    entire pipeline.  Nested dataclasses provide typed access to every
     setting, replacing scattered ``config.get()`` calls with consistent
     defaults.
-
-    ``signal_processing`` is kept as raw dicts because its schema varies
-    per channel and step — wrapping each layer in a dataclass would add
-    boilerplate without meaningful type safety.
     """
 
     database_name: str = 'mimic3wdb-matched/1.0'
     input_channels: List[str] = field(default_factory=list)
     output_channels: List[str] = field(default_factory=list)
     record_list_file: str = 'inputs/record_list.txt'
-    signal_processing: List[Dict[str, Any]] = field(default_factory=list)
+    signal_processing: List[ChannelProcessingConfig] = field(default_factory=list)
     long_nan_seq_removal: Optional[List[Dict[str, Any]]] = None
     windowing: WindowingConfig = field(default_factory=WindowingConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
@@ -115,7 +182,7 @@ class PipelineConfig:
 
     @property
     def channel_names(self) -> List[str]:
-        return [ch_config["channel"] for ch_config in self.signal_processing]
+        return [ch.channel for ch in self.signal_processing]
 
     @property
     def has_windowing(self) -> bool:
@@ -128,7 +195,10 @@ class PipelineConfig:
             input_channels=config_dict.get('input_channels', []),
             output_channels=config_dict.get('output_channels', []),
             record_list_file=config_dict.get('record_list_file', 'inputs/record_list.txt'),
-            signal_processing=config_dict.get('signal_processing', []),
+            signal_processing=[
+                ChannelProcessingConfig.from_dict(d)
+                for d in config_dict.get('signal_processing', [])
+            ],
             long_nan_seq_removal=config_dict.get('long_nan_seq_removal', None),
             windowing=WindowingConfig.from_dict(config_dict.get('windowing', {})),
             validation=ValidationConfig.from_dict(config_dict.get('validation', {})),

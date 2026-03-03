@@ -6,6 +6,7 @@ from preprocessing.imputing import create_imputer
 from validation.visualize_steps import visualize_step_for_record, visualize_long_nan_removal_for_record
 from common.signal_data import SignalData
 from common.processing_context import ProcessingContext
+from common.pipeline_config import ChannelProcessingConfig, DownsamplingStepConfig
 import copy
 
 
@@ -117,20 +118,16 @@ def remove_long_nan_sequences(step_idx, processed_data_array: List[SignalData], 
         
 
 
-def downsample_record(channel, to_downsample, current_fs):
-
-    downsampling_strategy = to_downsample.get('downsampling_strategy', 'decimate')
-    desired_resolution = to_downsample.get('desired_resolution', 1.0)
-    downsampler = create_downsampler(downsampling_strategy)
-    channel = downsampler.downsample(channel, desired_resolution, current_fs)
-
-    return channel, desired_resolution
+def downsample_record(channel: np.ndarray, config: DownsamplingStepConfig, current_fs: float) -> Tuple[np.ndarray, float]:
+    downsampler = create_downsampler(config.strategy)
+    channel = downsampler.downsample(channel, config.desired_resolution, current_fs)
+    return channel, config.desired_resolution
 
 
 def perform_signal_processing(
         filtered_data: np.ndarray,
         filtered_names: List[str],
-        signal_processing: List[Dict[str, Any]],
+        signal_processing: List[ChannelProcessingConfig],
         start_at_processing_step: int,
         process_until_step: int,
         metadata: ProcessingContext,
@@ -164,11 +161,10 @@ def perform_signal_processing(
     channels = {}
     filtered_names_list = list(filtered_names)
     for item in signal_processing:
-        channel_name = item.get('channel')
-        if channel_name not in filtered_names_list:
-            raise DatasetCreationError(f"Channel {channel_name} not found in filtered names: {filtered_names_list}")
-        channel_idx = filtered_names_list.index(channel_name)
-        channels[channel_name] = np.array(filtered_data[:, channel_idx])
+        if item.channel not in filtered_names_list:
+            raise DatasetCreationError(f"Channel {item.channel} not found in filtered names: {filtered_names_list}")
+        channel_idx = filtered_names_list.index(item.channel)
+        channels[item.channel] = np.array(filtered_data[:, channel_idx])
     processed_data_array: List[SignalData] = [SignalData(channels=channels)]
 
 
@@ -180,47 +176,41 @@ def perform_signal_processing(
         long_nan_removal_config_dict[after_step] = max_consecutive_nans
 
 
-    # process step by step 
-    # get max steps for all channels
-    max_steps = max(len(channel_config.get('steps', [])) for channel_config in signal_processing)
-    # for donwsampling we need the current fs
-    current_fs = {}
-    for channel_name in filtered_names:
-        current_fs[channel_name] = metadata.sampling_rate
+    # process step by step
+    max_steps = max(len(ch.steps) for ch in signal_processing)
+    current_fs = {ch_name: metadata.sampling_rate for ch_name in filtered_names}
+
     for step_idx in range(start_at_processing_step, process_until_step):
 
         processed_data_array_copy = copy.deepcopy(processed_data_array)
         for channel_name in filtered_names:
 
-            channel_config = next((item for item in signal_processing if item.get('channel') == channel_name), None)
-            if channel_config:
+            ch_cfg = next((item for item in signal_processing if item.channel == channel_name), None)
+            if not ch_cfg:
+                continue
 
-                steps = channel_config.get('steps', [])
-                current_step = next((step for step in steps if step.get('step') == step_idx), None)
+            current_step = next((s for s in ch_cfg.steps if s.step == step_idx), None)
+            if not current_step:
+                continue
 
-                if current_step:
+            # Resolve factories once per step, not per data-array element
+            downsampler = create_downsampler(current_step.downsampling.strategy) if current_step.downsampling else None
+            imputer = create_imputer(current_step.imputation.method) if current_step.imputation else None
 
-                    for i in range(len(processed_data_array)):
-                        channel = processed_data_array[i][channel_name]
+            for i in range(len(processed_data_array)):
+                channel = processed_data_array[i][channel_name]
 
-                        to_downsample = current_step.get("downsampling", {})
-                        to_data_cleaning = current_step.get("data_cleaning", {})
-                        to_imputation = current_step.get("imputation", {})
+                if current_step.downsampling:
+                    channel = downsampler.downsample(channel, current_step.downsampling.desired_resolution, current_fs[channel_name])
+                    current_fs[channel_name] = current_step.downsampling.desired_resolution
 
-                        if to_downsample != {}:
-                            channel, current_fs[channel_name] = downsample_record(channel, to_downsample, current_fs[channel_name])
+                if current_step.data_cleaning:
+                    channel = clean_data(channel, current_step.data_cleaning.lower_threshold, current_step.data_cleaning.upper_threshold)
 
-                        if to_data_cleaning != {}:
-                            lower_threshold = to_data_cleaning.get('lower_threshold')
-                            upper_threshold = to_data_cleaning.get('upper_threshold')
-                            channel = clean_data(channel, lower_threshold, upper_threshold)
+                if imputer:
+                    channel = imputer.impute(processed_data_array[i], channel_name, metadata.imputer_path)
 
-                        if to_imputation != {}:
-                            imputation_strategy = to_imputation.get('method', 'mean')
-                            imputer = create_imputer(imputation_strategy)
-                            channel = imputer.impute(processed_data_array[i], channel_name, metadata.imputer_path)
-                            
-                        processed_data_array[i][channel_name] = channel
+                processed_data_array[i][channel_name] = channel
 
 
         if metadata.record_id in records_to_visualize:

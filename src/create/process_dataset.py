@@ -78,25 +78,21 @@ def load_record_list(config: PipelineConfig, logger) -> pd.DataFrame:
 
 def check_if_imputer_needs_to_be_trained(config: PipelineConfig) -> bool:
     """Check if any imputer in the configuration needs to be trained."""
-    for channel_config in config.signal_processing:
-        steps = channel_config.get('steps', [])
-        for step_config in steps:
-            to_imputation = step_config.get("imputation", {})
-            if is_imputer_that_needs_split(to_imputation.get('method')):
+    for ch_cfg in config.signal_processing:
+        for step in ch_cfg.steps:
+            if step.imputation and is_imputer_that_needs_split(step.imputation.method):
                 return True
     return False
 
 def get_step_for_windowing_and_split(config: PipelineConfig) -> Tuple[int, int, int]:
     """Get start and stop processing steps for intermediate window creation."""
-    max_steps = max(len(channel_config.get('steps', [])) for channel_config in config.signal_processing)
+    max_steps = max(len(ch.steps) for ch in config.signal_processing)
 
     if check_if_imputer_needs_to_be_trained(config):
-        for channel_config in config.signal_processing:
-            steps = channel_config.get('steps', [])
-            for step_idx in range(len(steps)):
-                to_imputation = steps[step_idx].get("imputation", {})
-                if is_imputer_that_needs_split(to_imputation.get('method')):
-                    return 0, step_idx, max_steps
+        for ch_cfg in config.signal_processing:
+            for step in ch_cfg.steps:
+                if step.imputation and is_imputer_that_needs_split(step.imputation.method):
+                    return 0, step.step, max_steps
 
     return 0, max_steps, max_steps
 
