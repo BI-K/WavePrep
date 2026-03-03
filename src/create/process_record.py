@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple, Any
 
 from common.pipeline_config import PipelineConfig
 from common.processing_context import ProcessingContext
-from create.record_loader import RecordLoader, WfdbRecordLoader, CsvRecordLoader, LoadedRecord
+from create.record_loader import RecordLoader, LoadedRecord, create_record_loader
 from preprocessing.windowing import create_windower
 from preprocessing.signal_processing import perform_signal_processing
 from preprocessing.imputing import is_imputer_that_needs_split
@@ -179,9 +179,14 @@ def create_samples_from_record_from_wfdb(record_path: str, offset_start_seconds:
             windowing_config=config.windowing,
         )
         
-        loader: RecordLoader = WfdbRecordLoader(
-            record_path, offset_start_seconds, offset_end_seconds,
-            config, logger, metadata_base,
+        loader = create_record_loader(
+            'wfdb',
+            record_path=record_path,
+            offset_start=offset_start_seconds,
+            offset_end=offset_end_seconds,
+            config=config,
+            logger=logger,
+            metadata_base=metadata_base,
         )
         loaded_records, load_error = loader.load()
         
@@ -296,7 +301,7 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
                 record_type = "observation" if "observation" in csv_path else "prediction"
                 base_metadata.record_id = f"{record_path.stem}_{record_type}"
 
-                loader: RecordLoader = CsvRecordLoader(csv_path, base_metadata)
+                loader = create_record_loader('csv', file_path=csv_path, metadata=base_metadata)
                 loaded_records, load_error = loader.load()
                 if load_error or not loaded_records:
                     continue

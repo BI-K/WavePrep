@@ -208,3 +208,25 @@ class CsvRecordLoader(RecordLoader):
             )], ""
         except Exception as e:
             return [], f"Load error: {str(e)}"
+
+
+_LOADERS = {
+    'wfdb': WfdbRecordLoader,
+    'csv': CsvRecordLoader,
+}
+
+
+def create_record_loader(source: str, **kwargs) -> RecordLoader:
+    """Factory function to create a record loader instance.
+
+    Args:
+        source: Record source type ('wfdb', 'csv')
+        **kwargs: Arguments forwarded to the loader constructor
+
+    Returns:
+        RecordLoader instance
+    """
+    cls = _LOADERS.get(source)
+    if cls is None:
+        raise ValueError(f"Unknown record source: {source}. Available: {list(_LOADERS)}")
+    return cls(**kwargs)
