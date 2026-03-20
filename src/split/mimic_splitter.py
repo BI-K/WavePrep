@@ -146,19 +146,27 @@ def discover_subjects_and_samples(input_path: Path, logger) -> Dict[str, Dict[st
     for subject_dir in tqdm(subject_dirs, desc="Scanning subjects", leave=False):
         subject_id = subject_dir.name
         
-        # Find CSV files in subject directory
+        # Skip split directories (train/test/validation) created by output setup
+        if subject_id in ('train', 'test', 'validation'):
+            continue
+
+        # Find data files in subject directory (any supported format or NPY intermediate)
         subject_observation_window_dir = subject_dir / "observation"
         subject_preditction_window_dir = subject_dir / "prediction"
-        csv_files = list(subject_observation_window_dir.glob("*.csv"))
+        if not subject_observation_window_dir.exists():
+            continue
+        data_files = [f for f in subject_observation_window_dir.iterdir()
+                      if f.is_file() and f.suffix in ('.csv', '.npy', '.edf', '.mat', '.wav', '.dat')
+                      and not f.name.endswith('.npy.json') and not f.name.endswith('.wav.json')]
         
-        if csv_files:
+        if data_files:
             # Get total file size for this subject
-            total_size = sum(f.stat().st_size for f in csv_files)
+            total_size = sum(f.stat().st_size for f in data_files)
             
             subjects_data[subject_id] = {
                 'subject_id': subject_id,
-                'total_samples': len(csv_files),
-                'sample_files': [f.name for f in csv_files],
+                'total_samples': len(data_files),
+                'sample_files': [f.name for f in data_files],
                 'total_size_bytes': total_size,
                 'directory_path': str(subject_dir)  # Convert to string for JSON serialization
             }
@@ -166,7 +174,7 @@ def discover_subjects_and_samples(input_path: Path, logger) -> Dict[str, Dict[st
     logger.info(f"Discovered {len(subjects_data)} subjects with data")
     
     if len(subjects_data) == 0:
-        raise DataValidationError("No subjects with CSV files found")
+        raise DataValidationError("No subjects with data files found")
     
     return subjects_data
 
@@ -375,9 +383,8 @@ def copy_split_data(splits: Dict[str, List[str]], input_path: Path, output_dir: 
                 # Copy entire subject directory
                 shutil.move(source_dir, target_dir)
                 
-                # Count files copied
-                csv_files = list(target_dir.glob("*.csv"))
-                total_files_copied += len(csv_files)
+                # Count files copied (any format)
+                total_files_copied += sum(1 for _ in target_dir.rglob("*") if _.is_file())
 
             else:
                 logger.warning(f"Source directory not found: {source_dir}")

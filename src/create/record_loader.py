@@ -210,9 +210,37 @@ class CsvRecordLoader(RecordLoader):
             return [], f"Load error: {str(e)}"
 
 
+class NpyRecordLoader(RecordLoader):
+    """Loads a waveform record from a NumPy .npy file with a JSON sidecar."""
+
+    def __init__(self, file_path: str, metadata: ProcessingContext):
+        self.file_path = file_path
+        self.metadata = metadata
+
+    def load(self) -> Tuple[List[LoadedRecord], str]:
+        import json
+        try:
+            data = np.load(self.file_path)
+            sidecar_path = self.file_path + '.json'
+            if Path(sidecar_path).exists():
+                with open(sidecar_path, 'r') as f:
+                    meta = json.load(f)
+                channel_names = meta['channel_names']
+            else:
+                channel_names = [f'ch_{i}' for i in range(data.shape[1])]
+            return [LoadedRecord(
+                signal_data=data,
+                channel_names=channel_names,
+                metadata=self.metadata,
+            )], ""
+        except Exception as e:
+            return [], f"Load error: {str(e)}"
+
+
 _LOADERS = {
     'wfdb': WfdbRecordLoader,
     'csv': CsvRecordLoader,
+    'npy': NpyRecordLoader,
 }
 
 

@@ -98,7 +98,8 @@ def get_step_for_windowing_and_split(config: PipelineConfig) -> Tuple[int, int, 
 
 
 def process_records_parallel_wfdb(records_df: pd.DataFrame, config: PipelineConfig, start_step: int, end_step: int, max_workers: int,
-                           output_manager, logger, log_file_path=None, records_to_visualize = []) -> List[Tuple[str, int, str, Dict[str, Any]]]:
+                           output_manager, logger, log_file_path=None, records_to_visualize = [],
+                           intermediate: bool = False) -> List[Tuple[str, int, str, Dict[str, Any]]]:
     """Process multiple records in parallel."""
     
     logger.info(f"Starting parallel processing with {max_workers} workers")
@@ -113,7 +114,7 @@ def process_records_parallel_wfdb(records_df: pd.DataFrame, config: PipelineConf
 
         process_args = [
                 (row['full_path'], row["offset_start_seconds"], row["offset_end_seconds"], start_step, end_step,
-                config, output_manager, logger_name, idx, records_to_visualize)
+                config, output_manager, logger_name, idx, records_to_visualize, intermediate)
                 for idx, row in records_df.iterrows()
         ]
             
@@ -222,12 +223,18 @@ def create_dataset_pt_process_folder(folder_path: str, folder_name: str) -> List
     samples = []
     labels = []
     
-    observation_files = [f for f in os.listdir(os.path.join(folder_path, folder_name, "observation")) if f.endswith('.csv')]
+    obs_dir = os.path.join(folder_path, folder_name, "observation")
+    observation_files = [f for f in os.listdir(obs_dir)
+                         if f.endswith('.csv') or f.endswith('.npy')
+                         and not f.endswith('.npy.json')]
     for file in observation_files:
-        file_path = os.path.join(folder_path, folder_name, "observation", file)
-        samples_df = pd.read_csv(file_path)
-        labels_df = pd.read_csv(os.path.join(folder_path, folder_name, "prediction", file))
-        samples.append(samples_df.values.tolist())
+        file_path = os.path.join(obs_dir, file)
+        if file.endswith('.npy'):
+            data = np.load(file_path)
+            samples.append(data.tolist())
+        else:
+            samples_df = pd.read_csv(file_path)
+            samples.append(samples_df.values.tolist())
     
     return samples
 
@@ -321,9 +328,11 @@ def run_dataset_creation(config: PipelineConfig, output_manager, logger, log_fil
         logger.info(f"Processing {len(records_df)} records with {max_workers} workers")
 
         start_step, end_step, max_steps = get_step_for_windowing_and_split(config)
+        has_second_pass = max_steps > end_step
 
         results = process_records_parallel_wfdb(records_df, config, start_step, end_step, 
-                                                max_workers, output_manager, logger, log_file_path, records_to_visualize)
+                                                max_workers, output_manager, logger, log_file_path, records_to_visualize,
+                                                intermediate=has_second_pass)
         _log_phase_completion(logger, "FIRST SIGNAL PROCESSING COMPLETED", start_time)
 
         split_results = split_dataset(config, output_manager, logger)

@@ -38,6 +38,9 @@ class ValidationConfig:
         )
 
 
+SUPPORTED_SAVE_FORMATS = ('csv', 'edf', 'matlab', 'wav', 'wfdb')
+
+
 @dataclass
 class OutputConfig:
     base_dir: str = "outputs"
@@ -45,15 +48,23 @@ class OutputConfig:
         default_factory=lambda: ['logs', 'reports', 'data', 'splits']
     )
     include_metadata: bool = False
+    save_format: str = 'csv'
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'OutputConfig':
+        save_format = d.get('save_format', 'csv').lower()
+        if save_format not in SUPPORTED_SAVE_FORMATS:
+            raise ValueError(
+                f"Unsupported save_format '{save_format}'. "
+                f"Supported formats: {SUPPORTED_SAVE_FORMATS}"
+            )
         return cls(
             base_dir=d.get('base_dir', 'outputs'),
             directory_structure=d.get(
                 'directory_structure', ['logs', 'reports', 'data', 'splits']
             ),
             include_metadata=d.get('include_metadata', False),
+            save_format=save_format,
         )
 
 
@@ -190,6 +201,11 @@ class PipelineConfig:
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'PipelineConfig':
+        # Allow save_format at top-level or inside output section
+        output_dict = dict(config_dict.get('output', {}))
+        if 'save_format' in config_dict:
+            output_dict.setdefault('save_format', config_dict['save_format'])
+
         return cls(
             database_name=config_dict.get('database_name', 'mimic3wdb-matched/1.0'),
             input_channels=config_dict.get('input_channels', []),
@@ -202,7 +218,7 @@ class PipelineConfig:
             long_nan_seq_removal=config_dict.get('long_nan_seq_removal', None),
             windowing=WindowingConfig.from_dict(config_dict.get('windowing', {})),
             validation=ValidationConfig.from_dict(config_dict.get('validation', {})),
-            output=OutputConfig.from_dict(config_dict.get('output', {})),
+            output=OutputConfig.from_dict(output_dict),
             splitting=SplittingConfig.from_dict(config_dict),
         )
 
