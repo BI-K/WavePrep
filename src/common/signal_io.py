@@ -1,9 +1,10 @@
-"""Writers for multiple waveform output formats.
+"""Readers and writers for multiple waveform output formats.
 
-Uses WFDB for native WFDB and MATLAB output.
-Uses pyedflib for EDF output.
-Uses soundfile for WAV output.
-CSV uses pandas.
+Writers use WFDB for native WFDB and MATLAB output, pyedflib for EDF,
+soundfile for WAV, and pandas for CSV.
+
+Readers normalise any supported format back into (rows, channel_names)
+tuples for downstream consumption (e.g. Croissant manifest building).
 
 The WFDB MATLAB conversion operates on an on-disk WFDB record, so the
 workflow for MATLAB is:
@@ -222,3 +223,63 @@ def get_signal_writer(fmt: str):
 def get_file_extension(fmt: str) -> str:
     """Return the file extension (with dot) for the given format."""
     return FORMAT_EXTENSIONS.get(fmt.lower(), '.csv')
+
+
+def read_signal_data(
+    path: Path,
+    save_format: str,
+) -> tuple[list[list[float]], list[str]]:
+    """Read a sample file and return (rows_as_nested_lists, channel_names).
+
+    Unified reader for all supported formats. Returns data as a list of rows
+    (each row is a list of per-channel floats) plus ordered channel names.
+    """
+    fmt = save_format.lower()
+
+    if fmt == 'csv':
+        df = pd.read_csv(path)
+        return df.values.tolist(), list(df.columns)
+
+    if fmt == 'edf':
+        import pyedflib
+        reader = pyedflib.EdfReader(str(path))
+        try:
+            n = reader.signals_in_file
+            signals = [reader.readSignal(i) for i in range(n)]
+            channels = [reader.getLabel(i).strip() for i in range(n)]
+            return np.column_stack(signals).tolist(), channels
+        finally:
+            reader.close()
+
+    if fmt == 'matlab':
+        from scipy.io import loadmat
+        contents = loadmat(str(path))
+        arrays = {
+            k: v for k, v in contents.items()
+            if not k.startswith('__') and isinstance(v, np.ndarray)
+        }
+        _, value = max(arrays.items(), key=lambda item: item[1].size)
+        arr = np.asarray(value)
+        if arr.ndim == 2:
+            arr = arr.T  # MATLAB stores (channels, samples)
+        channels = [f"ch_{i}" for i in range(arr.shape[-1] if arr.ndim > 1 else 1)]
+        return arr.tolist(), channels
+
+    if fmt == 'wav':
+        import json
+        import soundfile as sf
+        data, _ = sf.read(str(path), always_2d=True)
+        sidecar = path.with_suffix('.wav.json')
+        if sidecar.exists():
+            meta = json.loads(sidecar.read_text(encoding='utf-8'))
+            channels = meta.get('channel_names', [])
+        else:
+            channels = [f"ch_{i}" for i in range(data.shape[1])]
+        return data.tolist(), channels
+
+    if fmt == 'wfdb':
+        record = wfdb.rdrecord(str(path.with_suffix('')))
+        data = record.p_signal if record.p_signal is not None else record.d_signal
+        return np.asarray(data).tolist(), list(record.sig_name)
+
+    raise ValueError(f"Unsupported format for reading: {fmt}")

@@ -18,7 +18,7 @@ from preprocessing.windowing import create_windower
 from preprocessing.signal_processing import perform_signal_processing
 from preprocessing.imputing import is_imputer_that_needs_split
 from common.signal_data import SignalData, WindowedData
-from common.signal_writer import get_signal_writer, get_file_extension
+from common.signal_io import get_signal_writer, get_file_extension
 
 import json as _json
 
@@ -94,9 +94,9 @@ def save_uncutsamples(samples: List[SignalData],
         if intermediate:
             ext = '.npy'
         else:
-            ext = get_file_extension(config.output.effective_save_format)
+            ext = get_file_extension(config.output.save_format)
         writer = None if intermediate else get_signal_writer(
-            config.output.effective_save_format
+            config.output.save_format
         )
         fs = 1.0 / config.windowing.expected_resolution if config.windowing.expected_resolution else 1.0
 
@@ -147,9 +147,9 @@ def save_windows(windows: WindowedData,
         if intermediate:
             ext = '.npy'
         else:
-            ext = get_file_extension(config.output.effective_save_format)
+            ext = get_file_extension(config.output.save_format)
         writer = None if intermediate else get_signal_writer(
-            config.output.effective_save_format
+            config.output.save_format
         )
         fs = 1.0 / config.windowing.expected_resolution if config.windowing.expected_resolution else 1.0
 
@@ -347,7 +347,7 @@ def create_samples_from_record_from_split(split: str, subject: str, start_step: 
             windowing_config=config.windowing,
         )
 
-        save_format = config.output.effective_save_format
+        save_format = config.output.save_format
         writer = get_signal_writer(save_format)
         final_ext = get_file_extension(save_format)
         fs = 1.0 / config.windowing.expected_resolution if config.windowing.expected_resolution else 1.0

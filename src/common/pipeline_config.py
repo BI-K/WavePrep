@@ -38,7 +38,7 @@ class ValidationConfig:
         )
 
 
-SUPPORTED_SAVE_FORMATS = ('csv', 'edf', 'matlab', 'wav', 'wfdb', 'mlcroissant')
+SUPPORTED_SAVE_FORMATS = ('csv', 'edf', 'matlab', 'wav', 'wfdb')
 
 
 @dataclass
@@ -53,20 +53,8 @@ class OutputConfig:
     hf_repo_id: Optional[str] = None
 
     @property
-    def effective_save_format(self) -> str:
-        """Return the on-disk sample format used by the processing pipeline.
-
-        ``mlcroissant`` is a dataset-level export format, not a per-sample file
-        writer. The pipeline therefore stages samples as CSV files and exports
-        the Croissant package after splitting has completed.
-        """
-        if self.save_format == 'mlcroissant':
-            return 'csv'
-        return self.save_format
-
-    @property
     def is_croissant_export(self) -> bool:
-        return self.generate_croissant or self.save_format == 'mlcroissant'
+        return self.generate_croissant
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'OutputConfig':
@@ -83,8 +71,37 @@ class OutputConfig:
             ),
             include_metadata=d.get('include_metadata', False),
             save_format=save_format,
-            generate_croissant=d.get('generate_croissant', save_format == 'mlcroissant'),
+            generate_croissant=d.get('generate_croissant', False),
             hf_repo_id=d.get('hf_repo_id'),
+        )
+
+
+@dataclass
+class PublicationConfig:
+    """Metadata fields that flow into the Croissant JSON-LD and HuggingFace card.
+
+    Defaults are placeholders — override in config before publishing.
+    """
+    dataset_name: str = 'PLACEHOLDER_DATASET_NAME'
+    dataset_url: str = 'https://example.com/placeholder-dataset-url'
+    creator: str = 'PLACEHOLDER_CREATOR'
+    date_published: str = '1970-01-01'
+    license: str = 'https://opendatacommons.org/licenses/odbl/1-0/'
+    cite_as: Optional[str] = None
+    version: str = '1.0.0'
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> 'PublicationConfig':
+        if not d:
+            return cls()
+        return cls(
+            dataset_name=d.get('dataset_name', 'PLACEHOLDER_DATASET_NAME'),
+            dataset_url=d.get('dataset_url', 'https://example.com/placeholder-dataset-url'),
+            creator=d.get('creator', 'PLACEHOLDER_CREATOR'),
+            date_published=d.get('date_published', '1970-01-01'),
+            license=d.get('license', 'https://opendatacommons.org/licenses/odbl/1-0/'),
+            cite_as=d.get('cite_as'),
+            version=d.get('version', '1.0.0'),
         )
 
 
@@ -206,6 +223,7 @@ class PipelineConfig:
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     splitting: SplittingConfig = field(default_factory=SplittingConfig)
+    publication: PublicationConfig = field(default_factory=PublicationConfig)
 
     @property
     def required_channels(self) -> List[str]:
@@ -244,6 +262,7 @@ class PipelineConfig:
             validation=ValidationConfig.from_dict(config_dict.get('validation', {})),
             output=OutputConfig.from_dict(output_dict),
             splitting=SplittingConfig.from_dict(config_dict),
+            publication=PublicationConfig.from_dict(config_dict.get('publication', {})),
         )
 
     def to_dict(self) -> Dict[str, Any]:

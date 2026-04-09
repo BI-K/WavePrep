@@ -17,25 +17,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List
 
-import numpy as np
-import pandas as pd
-
 from common.pipeline_config import PipelineConfig
+from common.signal_io import get_file_extension, read_signal_data
 
-FORMAT_SUFFIXES: Dict[str, str] = {
-    'csv': '.csv',
-    'edf': '.edf',
-    'matlab': '.mat',
-    'wav': '.wav',
-    'wfdb': '.dat',
-    'mlcroissant': '.csv',
-}
-
-LICENSE_URL = "https://opendatacommons.org/licenses/odbl/1-0/"
-PLACEHOLDER_DATASET_NAME = "PLACEHOLDER_DATASET_NAME"
-PLACEHOLDER_DATASET_URL = "https://example.com/placeholder-dataset-url"
-PLACEHOLDER_CREATOR = "PLACEHOLDER_CREATOR"
-PLACEHOLDER_DATE_PUBLISHED = "1970-01-01"
 MANIFEST_SUBDIR = Path("data") / "mlcroissant"
 MANIFEST_FILENAME = "samples.jsonl"
 METADATA_FILENAME = "mlcroissant_metadata.jsonld"
@@ -83,6 +67,7 @@ def export_croissant_dataset(
     )
 
     logger.info("Validating MLCroissant metadata and TFDS compatibility")
+    _clear_croissant_cache()
     validation_results = validate_croissant_dataset(metadata_path, logger)
     validation_report_path.write_text(
         json.dumps(validation_results, indent=2, default=str),
@@ -97,6 +82,13 @@ def export_croissant_dataset(
         "sample_count": stats["sample_count"],
         "split_counts": dict(stats["split_counts"]),
     }
+
+
+def _clear_croissant_cache() -> None:
+    """Remove the mlcroissant download cache to avoid stale hash mismatches."""
+    cache_dir = Path.home() / ".cache" / "croissant"
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir, ignore_errors=True)
 
 
 def validate_croissant_dataset(
@@ -274,81 +266,13 @@ def _write_manifest(
     return stats
 
 
-def _read_sample_data(
-    path: Path,
-    save_format: str,
-) -> tuple[list[list[float]], list[str]]:
-    """Read a sample file and return (rows_as_nested_lists, channel_names).
-
-    Each supported save format has a reader that normalises the data into a
-    uniform shape: a list of rows where each row is a list of channel values,
-    plus an ordered list of channel name strings.
-    """
-    if save_format in ('csv', 'mlcroissant'):
-        df = pd.read_csv(path)
-        return df.values.tolist(), list(df.columns)
-
-    if save_format == 'edf':
-        import pyedflib
-
-        reader = pyedflib.EdfReader(str(path))
-        try:
-            n = reader.signals_in_file
-            signals = [reader.readSignal(i) for i in range(n)]
-            channels = [reader.getLabel(i).strip() for i in range(n)]
-            return np.column_stack(signals).tolist(), channels
-        finally:
-            reader.close()
-
-    if save_format == 'matlab':
-        from scipy.io import loadmat
-
-        contents = loadmat(str(path))
-        arrays = {
-            k: v for k, v in contents.items()
-            if not k.startswith('__') and isinstance(v, np.ndarray)
-        }
-        _, value = max(arrays.items(), key=lambda item: item[1].size)
-        arr = np.asarray(value)
-        if arr.ndim == 2:
-            arr = arr.T  # MATLAB stores (channels, samples)
-        channels = [f"ch_{i}" for i in range(arr.shape[-1] if arr.ndim > 1 else 1)]
-        return arr.tolist(), channels
-
-    if save_format == 'wav':
-        import soundfile as sf
-
-        data, _ = sf.read(str(path), always_2d=True)
-        sidecar = path.with_suffix('.wav.json')
-        if sidecar.exists():
-            meta = json.loads(sidecar.read_text(encoding='utf-8'))
-            channels = meta.get('channel_names', [])
-        else:
-            channels = [f"ch_{i}" for i in range(data.shape[1])]
-        return data.tolist(), channels
-
-    if save_format == 'wfdb':
-        import wfdb
-
-        record = wfdb.rdrecord(str(path.with_suffix('')))
-        data = record.p_signal if record.p_signal is not None else record.d_signal
-        return np.asarray(data).tolist(), list(record.sig_name)
-
-    raise ValueError(f"Unsupported format for Croissant manifest: {save_format}")
-
-
 def _iter_split_sample_entries(
     config: PipelineConfig,
     base_dir: Path,
 ) -> Iterator[Dict[str, Any]]:
     data_dir = base_dir / "data"
-    save_format = config.output.effective_save_format
-    suffix = FORMAT_SUFFIXES.get(save_format)
-    if suffix is None:
-        raise ValueError(
-            f"No known file suffix for save_format '{save_format}'. "
-            f"Supported formats: {list(FORMAT_SUFFIXES.keys())}"
-        )
+    save_format = config.output.save_format
+    suffix = get_file_extension(save_format)
 
     sampling_rate_hz = (
         1.0 / config.windowing.expected_resolution
@@ -377,8 +301,8 @@ def _iter_split_sample_entries(
                         f"Missing prediction file for {observation_file}"
                     )
 
-                observation, obs_channels = _read_sample_data(observation_file, save_format)
-                prediction, pred_channels = _read_sample_data(prediction_file, save_format)
+                observation, obs_channels = read_signal_data(observation_file, save_format)
+                prediction, pred_channels = read_signal_data(prediction_file, save_format)
                 if obs_channels != pred_channels:
                     raise ValueError(
                         "Observation/prediction channels differ for "
@@ -427,6 +351,7 @@ def _build_metadata(
 ):
     import mlcroissant as mlc
 
+    pub = config.publication
     timestamp = datetime.now(timezone.utc).replace(microsecond=0)
     manifest_relative_path = Path(os.path.relpath(manifest_path, start=metadata_path.parent))
     manifest_bytes = manifest_path.read_bytes()
@@ -441,22 +366,23 @@ def _build_metadata(
     keywords = _build_keywords(config, stats["channel_names"])
     content_url = _resolve_content_url(config.output.hf_repo_id, manifest_relative_path)
 
+    cite_as = pub.cite_as or (
+        f"Generated by WavePrep from {config.database_name}. "
+        "Replace placeholder dataset identity fields before publication."
+    )
+
     return mlc.Metadata(
-        name=PLACEHOLDER_DATASET_NAME,
+        name=pub.dataset_name,
         description=description,
-        url=PLACEHOLDER_DATASET_URL,
-        creators=[mlc.Organization(name=PLACEHOLDER_CREATOR)],
-        date_published=PLACEHOLDER_DATE_PUBLISHED,
+        url=pub.dataset_url,
+        creators=[mlc.Organization(name=pub.creator)],
+        date_published=pub.date_published,
         date_created=timestamp,
         date_modified=timestamp,
-        version="1.0.0",
-        license=LICENSE_URL,
+        version=pub.version,
+        license=pub.license,
         keywords=keywords,
-        cite_as=(
-            "Generated by WavePrep from "
-            f"{config.database_name}. Replace placeholder dataset identity fields "
-            "before publication."
-        ),
+        cite_as=cite_as,
         conforms_to=["http://mlcommons.org/croissant/1.1"],
         distribution=[
             mlc.FileObject(

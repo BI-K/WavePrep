@@ -48,10 +48,20 @@
         "base_dir": "outputs",
         "save_format": "csv",
         "generate_croissant": true,
-        "hf_repo_id": "bhanuprasanna527/waveprep-mimic-iii",
+        "hf_repo_id": "username/waveprep-mimic-iii",
         "run_naming": {
             "format": "{task_name}_{timestamp}",
             "timestamp_format": "%Y%m%d_%H%M%S"
         }
+    },
+
+    "publication": {
+        "dataset_name": "PLACEHOLDER_DATASET_NAME",
+        "dataset_url": "https://example.com/placeholder-dataset-url",
+        "creator": "PLACEHOLDER_CREATOR",
+        "date_published": "1970-01-01",
+        "license": "https://opendatacommons.org/licenses/odbl/1-0/",
+        "cite_as": null,
+        "version": "1.0.0"
     }
 }

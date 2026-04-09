@@ -34,6 +34,7 @@ from .pipeline_config import (
     ValidationConfig,
     OutputConfig,
     SplittingConfig,
+    PublicationConfig,
 )
 
 from .script_utils import (
@@ -44,9 +45,10 @@ from .script_utils import (
     run_script_with_error_handling
 )
 
-from .signal_writer import (
+from .signal_io import (
     get_signal_writer,
     get_file_extension,
+    read_signal_data,
     FORMAT_EXTENSIONS,
 )
 
@@ -72,6 +74,7 @@ __all__ = [
     'ValidationConfig',
     'OutputConfig',
     'SplittingConfig',
+    'PublicationConfig',
 
     # Configuration utilities
     'ConfigManager',
@@ -88,8 +91,9 @@ __all__ = [
     'validate_required_config',
     'run_script_with_error_handling',
 
-    # Signal writer
+    # Signal I/O
     'get_signal_writer',
     'get_file_extension',
+    'read_signal_data',
     'FORMAT_EXTENSIONS',
 ]
