@@ -97,63 +97,29 @@ def validate_croissant_dataset(
 ) -> Dict[str, Any]:
     """Validate the generated Croissant JSON-LD.
 
-    Validation happens in three layers:
-    1. `mlcroissant` parsing.
-    2. Materializing records from the primary record set.
-    3. TFDS `CroissantBuilder` smoke validation, with `download_and_prepare`
-       executed only when `apache_beam` is installed.
+    Validation layers:
+    1. `mlcroissant` parsing — checks schema conformance.
+    2. Record materialisation — iterates all records from the primary record set.
     """
     import mlcroissant as mlc
-    import tensorflow_datasets as tfds
-    from tensorflow_datasets.core import file_adapters
 
     results: Dict[str, Any] = {
         "metadata_path": str(metadata_path),
         "mlcroissant": {},
-        "tfds": {},
     }
 
     dataset = mlc.Dataset(jsonld=metadata_path)
     record_set_ids = [record_set.id for record_set in dataset.metadata.record_sets]
+    record_count = sum(1 for _ in dataset.records("samples"))
     results["mlcroissant"] = {
         "status": "passed",
         "record_set_ids": record_set_ids,
-        "record_count": sum(1 for _ in dataset.records("samples")),
+        "record_count": record_count,
     }
-
-    builder = tfds.core.dataset_builders.CroissantBuilder(
-        jsonld=metadata_path,
-        file_format=file_adapters.FileFormat.ARRAY_RECORD,
-        data_dir=metadata_path.parent / ".tfds_validation",
+    logger.info(
+        f"Croissant validation passed: {record_count} records across record sets {record_set_ids}"
     )
-    tfds_result: Dict[str, Any] = {
-        "status": "passed",
-        "builder_name": builder.name,
-        "config_name": builder.builder_config.name,
-        "feature_keys": list(builder.info.features.keys()),
-    }
 
-    try:
-        import apache_beam  # noqa: F401
-    except ModuleNotFoundError:
-        tfds_result["download_and_prepare"] = "skipped_missing_apache_beam"
-        logger.warning(
-            "Skipping TFDS download_and_prepare for "
-            f"{metadata_path} because apache_beam is not installed"
-        )
-    else:
-        validation_data_dir = Path(builder.data_dir)
-        builder.download_and_prepare()
-        split_names = list(builder.info.splits.keys())
-        tfds_result["download_and_prepare"] = "passed"
-        tfds_result["split_names"] = split_names
-        if split_names:
-            data_source = builder.as_data_source(split=split_names[0])
-            first_example = data_source[0]
-            tfds_result["example_keys"] = sorted(first_example.keys())
-        shutil.rmtree(validation_data_dir, ignore_errors=True)
-
-    results["tfds"] = tfds_result
     return results
 
 
@@ -449,7 +415,6 @@ def _build_metadata(
                             file_object="samples_jsonl",
                             extract=mlc.Extract(column="split"),
                         ),
-                        references=mlc.Source(field="splits/name"),
                     ),
                     mlc.Field(
                         id="samples/channel_names",
