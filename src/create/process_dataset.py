@@ -19,6 +19,7 @@ import argparse
 import sys
 
 from common.pipeline_config import PipelineConfig
+from create.croissant_export import export_croissant_dataset
 from create.process_record import create_samples_from_record_from_wfdb, create_samples_from_record_from_split, extract_record_id
 from split.mimic_splitter import run_dataset_splitting, create_output_directory
 
@@ -359,6 +360,10 @@ def run_dataset_creation(config: PipelineConfig, output_manager, logger, log_fil
                 
                 merge_step_visualizations_for_record(record, start_offset_seconds, end_offset_seconds, signal_processing_config=config.signal_processing, output_path=output_path, windowing_config=config.windowing)
 
+        if config.output.is_croissant_export:
+            export_croissant_dataset(config, output_manager, logger)
+            _log_phase_completion(logger, "MLCROISSANT EXPORT COMPLETED", start_time)
+
         # TODO fix Save reports
         # save_reports(results, processing_time, config, output_manager, logger)
         
@@ -367,5 +372,4 @@ def run_dataset_creation(config: PipelineConfig, output_manager, logger, log_fil
     except Exception as e:
         logger.error(f"Dataset creation failed: {e}")
         raise
-
 

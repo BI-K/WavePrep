@@ -47,6 +47,8 @@
     "output": {
         "base_dir": "outputs",
         "save_format": "csv",
+        "generate_croissant": true,
+        "hf_repo_id": "bhanuprasanna527/waveprep-mimic-iii",
         "run_naming": {
             "format": "{task_name}_{timestamp}",
             "timestamp_format": "%Y%m%d_%H%M%S"

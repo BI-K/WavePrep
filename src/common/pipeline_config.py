@@ -38,7 +38,7 @@ class ValidationConfig:
         )
 
 
-SUPPORTED_SAVE_FORMATS = ('csv', 'edf', 'matlab', 'wav', 'wfdb')
+SUPPORTED_SAVE_FORMATS = ('csv', 'edf', 'matlab', 'wav', 'wfdb', 'mlcroissant')
 
 
 @dataclass
@@ -49,10 +49,28 @@ class OutputConfig:
     )
     include_metadata: bool = False
     save_format: str = 'csv'
+    generate_croissant: bool = False
+    hf_repo_id: Optional[str] = None
+
+    @property
+    def effective_save_format(self) -> str:
+        """Return the on-disk sample format used by the processing pipeline.
+
+        ``mlcroissant`` is a dataset-level export format, not a per-sample file
+        writer. The pipeline therefore stages samples as CSV files and exports
+        the Croissant package after splitting has completed.
+        """
+        if self.save_format == 'mlcroissant':
+            return 'csv'
+        return self.save_format
+
+    @property
+    def is_croissant_export(self) -> bool:
+        return self.generate_croissant or self.save_format == 'mlcroissant'
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'OutputConfig':
-        save_format = d.get('save_format', 'csv').lower()
+        save_format = d.get('save_format', d.get('output_format', 'csv')).lower()
         if save_format not in SUPPORTED_SAVE_FORMATS:
             raise ValueError(
                 f"Unsupported save_format '{save_format}'. "
@@ -65,6 +83,8 @@ class OutputConfig:
             ),
             include_metadata=d.get('include_metadata', False),
             save_format=save_format,
+            generate_croissant=d.get('generate_croissant', save_format == 'mlcroissant'),
+            hf_repo_id=d.get('hf_repo_id'),
         )
 
 
@@ -201,10 +221,14 @@ class PipelineConfig:
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'PipelineConfig':
-        # Allow save_format at top-level or inside output section
+        # Allow save_format/output_format at top-level or inside output section
         output_dict = dict(config_dict.get('output', {}))
         if 'save_format' in config_dict:
             output_dict.setdefault('save_format', config_dict['save_format'])
+        if 'output_format' in config_dict:
+            output_dict.setdefault('save_format', config_dict['output_format'])
+        if 'output_format' in output_dict and 'save_format' not in output_dict:
+            output_dict['save_format'] = output_dict['output_format']
 
         return cls(
             database_name=config_dict.get('database_name', 'mimic3wdb-matched/1.0'),

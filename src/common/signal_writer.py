@@ -1,11 +1,12 @@
 """Writers for multiple waveform output formats.
 
-Uses the wfdb library for WFDB, EDF, and MATLAB formats.
-Uses soundfile for WAV format.
-CSV uses pandas as before.
+Uses WFDB for native WFDB and MATLAB output.
+Uses pyedflib for EDF output.
+Uses soundfile for WAV output.
+CSV uses pandas.
 
-The wfdb conversion functions (wfdb_to_edf, wfdb_to_mat) operate on
-on-disk WFDB records, so the workflow for EDF/MAT is:
+The WFDB MATLAB conversion operates on an on-disk WFDB record, so the
+workflow for MATLAB is:
   1. Write a temporary WFDB record via wfdb.wrsamp()
   2. Convert to the target format
   3. Remove the temporary WFDB files
@@ -13,13 +14,15 @@ on-disk WFDB records, so the workflow for EDF/MAT is:
 
 import os
 import logging
+import math
+import warnings
 from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 import wfdb
-from wfdb.io.convert import wfdb_to_edf, wfdb_to_mat
+from wfdb.io.convert import wfdb_to_mat
 
 logger = logging.getLogger(__name__)
 
@@ -59,36 +62,73 @@ def _write_wfdb(filepath: Path, data: np.ndarray, channel_names: List[str],
 
 def _write_edf(filepath: Path, data: np.ndarray, channel_names: List[str],
                fs: float) -> None:
-    """Write signal data as EDF via WFDB intermediate."""
-    record_name = filepath.stem
-    write_dir = str(filepath.parent)
+    """Write signal data as EDF using pyedflib.
 
-    # Write temporary WFDB record
-    units = ['mV'] * len(channel_names)
-    wfdb.wrsamp(
-        record_name,
-        fs=fs,
-        units=units,
-        sig_name=channel_names,
-        p_signal=data.astype(np.float64),
-        fmt=['16'] * len(channel_names),
-        write_dir=write_dir,
+    WFDB's `wfdb_to_edf` conversion truncates scientific notation in fixed-width
+    EDF physical min/max fields for some short windows, producing unreadable
+    files. Writing EDF directly avoids that corruption and preserves the actual
+    window length instead of forcing 10-second blocks.
+    """
+    import pyedflib
+
+    signal_matrix = np.asarray(data, dtype=np.float64)
+    if signal_matrix.ndim == 1:
+        signal_matrix = signal_matrix[:, np.newaxis]
+
+    signals = [signal_matrix[:, index] for index in range(signal_matrix.shape[1])]
+    signal_headers = []
+
+    for channel_name, signal in zip(channel_names, signals):
+        physical_min = float(np.min(signal))
+        physical_max = float(np.max(signal))
+        if physical_min == physical_max:
+            padding = max(abs(physical_min) * 1e-3, 1e-6)
+        else:
+            padding = max((physical_max - physical_min) * 1e-3, 1e-6)
+
+        signal_headers.append({
+            'label': channel_name[:16],
+            'dimension': 'mV',
+            'sample_frequency': fs,
+            'physical_min': physical_min - padding,
+            'physical_max': physical_max + padding,
+            'digital_min': -32768,
+            'digital_max': 32767,
+            'transducer': '',
+            'prefilter': '',
+        })
+
+    total_samples = int(signal_matrix.shape[0])
+    min_samples_per_record = max(1, int(math.ceil(fs * 0.001 - 1e-9)))
+    max_samples_per_record = max(
+        min_samples_per_record,
+        min(total_samples, int(math.floor(fs * 60 + 1e-9))),
     )
 
-    # Convert WFDB → EDF (wfdb_to_edf operates in cwd)
-    prev_cwd = os.getcwd()
-    try:
-        os.chdir(write_dir)
-        edf_filename = f"{record_name}.edf"
-        wfdb_to_edf(record_name, output_filename=edf_filename)
-    finally:
-        os.chdir(prev_cwd)
+    samples_per_record = None
+    for candidate in range(max_samples_per_record, min_samples_per_record - 1, -1):
+        if total_samples % candidate == 0:
+            samples_per_record = candidate
+            break
 
-    # Clean up temporary WFDB files
-    for ext in ('.dat', '.hea'):
-        tmp = Path(write_dir) / f"{record_name}{ext}"
-        if tmp.exists():
-            tmp.unlink()
+    if samples_per_record is None:
+        samples_per_record = max_samples_per_record
+
+    record_duration = samples_per_record / float(fs)
+
+    with pyedflib.EdfWriter(
+        str(filepath),
+        n_channels=len(signals),
+        file_type=pyedflib.FILETYPE_EDF,
+    ) as writer:
+        writer.setSignalHeaders(signal_headers)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                'ignore',
+                message='Forcing a specific record_duration might alter calculated sample_frequencies when reading the file',
+            )
+            writer.setDatarecordDuration(record_duration)
+        writer.writeSamples(signals, digital=False)
 
 
 def _write_matlab(filepath: Path, data: np.ndarray, channel_names: List[str],

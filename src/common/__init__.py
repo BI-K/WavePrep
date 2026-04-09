@@ -44,6 +44,12 @@ from .script_utils import (
     run_script_with_error_handling
 )
 
+from .signal_writer import (
+    get_signal_writer,
+    get_file_extension,
+    FORMAT_EXTENSIONS,
+)
+
 __all__ = [
     # Logging utilities
     'Logger',
@@ -80,5 +86,10 @@ __all__ = [
     'load_script_configuration',
     'setup_script_environment',
     'validate_required_config',
-    'run_script_with_error_handling'
+    'run_script_with_error_handling',
+
+    # Signal writer
+    'get_signal_writer',
+    'get_file_extension',
+    'FORMAT_EXTENSIONS',
 ]

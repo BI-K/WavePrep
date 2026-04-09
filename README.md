@@ -106,7 +106,7 @@ Start by specifying the basics
             "analysis",
             "splits"
         ],
-        # please do not change this
+        # supported formats: csv, edf, matlab, wav, wfdb, mlcroissant
         "save_format": "csv"
     }
 }
@@ -215,3 +215,16 @@ Each create script run will create a new folder in the `outputs/` directory with
 
 Splitting takes place by taking the subject IDs from the outputs/create/latest/data/ folder and then splitting them into train, validation, and test sets. The split is done using a "group shuffle" approach, which means that all records belonging to a single subject (group) are kept together in the same split (train, validation, or test). This ensures that the records of a subject are not divided across different sets, preventing data leakage between splits. For more information on group shuffle, see [GroupShuffleSplit in scikit-learn](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupShuffleSplit.html).
 
+When `save_format` is set to `mlcroissant`, WavePrep stages split samples as CSV,
+builds a JSONL-backed Croissant package under `data/mlcroissant/`, and writes
+the dataset metadata to `reports/mlcroissant_metadata.jsonld`.
+
+## 5) Format Build and Validation
+
+Use the test harness scripts to build and verify all output formats from the
+`configs/create/test_step_1.json` configuration:
+
+```bash
+python scripts/build_test_outputs.py
+python scripts/validate_output_formats.py
+```
