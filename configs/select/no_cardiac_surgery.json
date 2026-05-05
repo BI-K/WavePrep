@@ -1,0 +1,48 @@
+{
+    "name": "no_cardiac_surgery",
+    "description": "Patients with no cardiac surgery (no ICD-9 codes 35-39 and no CPT codes 33016-37799) during their ICU stay.",
+
+    "database": {
+        "matched_waveform_database": "mimic3wdb-matched/1.0",
+        "signal_duration_index": null,
+        "login": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "mimic_iii",
+            "user": "postgres",
+            "password": null
+        }
+    },
+
+    "record_requirements": {
+        "required_signals": ["CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"],
+        "min_duration_seconds": 3600,
+        "recording_type": "numeric",
+        "precomputed_records_path": null
+    },
+
+    "cohort_definition": [
+        {
+            "filter_type": "procedure",
+            "level": "stay_level",
+            "include_or_exclude": "exclude",
+            "max_icu_stays_per_admission": null,
+            "criteria": [
+                {
+                    "type": "icd9",
+                    "icd9_code_prefixes": ["35", "36", "37", "38", "39"]
+                },
+                {
+                    "type": "cpt",
+                    "cpt_code_ranges": [
+                        {"start": 33016, "end": 37799}
+                    ]
+                }
+            ]
+        }
+    ],
+
+    "output": {
+        "path": "inputs/"
+    }
+}

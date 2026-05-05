@@ -1,0 +1,39 @@
+{
+    "name": "no_vasopressors",
+    "description": "Patients with no vasopressor administration (neither CareVue nor MetaVision item IDs) during their ICU stay. Full recording duration is used.",
+
+    "database": {
+        "matched_waveform_database": "mimic3wdb-matched/1.0",
+        "signal_duration_index": null,
+        "login": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "mimic_iii",
+            "user": "postgres",
+            "password": null
+        }
+    },
+
+    "record_requirements": {
+        "required_signals": ["CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"],
+        "min_duration_seconds": 3600,
+        "recording_type": "numeric",
+        "precomputed_records_path": null
+    },
+
+    "cohort_definition": [
+        {
+            "filter_type": "medication",
+            "level": "time_span_level",
+            "include_or_exclude": "exclude",
+            "item_ids_cv": [30042, 30043, 30044, 30047, 30051, 30119, 30120, 30127, 30128],
+            "item_ids_mv": [221906, 221289, 221662, 222315, 221749, 221653],
+            "constrain_to_condition_period": false,
+            "min_condition_duration_seconds": null
+        }
+    ],
+
+    "output": {
+        "path": "inputs/"
+    }
+}

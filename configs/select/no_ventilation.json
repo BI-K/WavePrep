@@ -1,0 +1,38 @@
+{
+    "name": "no_ventilation",
+    "description": "Patients without mechanical ventilation (no CPT codes 94002 or 94003) during their ICU stay. Full recording duration is used.",
+
+    "database": {
+        "matched_waveform_database": "mimic3wdb-matched/1.0",
+        "signal_duration_index": null,
+        "login": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "mimic_iii",
+            "user": "postgres",
+            "password": null
+        }
+    },
+
+    "record_requirements": {
+        "required_signals": ["CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"],
+        "min_duration_seconds": 3600,
+        "recording_type": "numeric",
+        "precomputed_records_path": null
+    },
+
+    "cohort_definition": [
+        {
+            "filter_type": "mechanical_ventilation",
+            "level": "time_span_level",
+            "include_or_exclude": "exclude",
+            "cpt_codes": ["94002", "94003"],
+            "constrain_to_condition_period": false,
+            "min_condition_duration_seconds": null
+        }
+    ],
+
+    "output": {
+        "path": "inputs/"
+    }
+}

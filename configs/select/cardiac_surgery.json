@@ -1,0 +1,48 @@
+{
+    "name": "cardiac_surgery",
+    "description": "Patients with cardiac surgery (ICD-9 codes 35-39 or CPT codes 33016-37799) during their ICU stay. Only admissions with a single ICU stay are kept.",
+
+    "database": {
+        "matched_waveform_database": "mimic3wdb-matched/1.0",
+        "signal_duration_index": "inputs/mimic3wdb-matched_numerics_signals_duration.csv",
+        "login": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "mimic_iii",
+            "user": "postgres",
+            "password": null
+        }
+    },
+
+    "record_requirements": {
+        "required_signals": ["CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"],
+        "min_duration_seconds": 3600,
+        "recording_type": "numeric",
+        "precomputed_records_path": "inputs/valid_records_hinrichs_base_model_abp.json"
+    },
+
+    "cohort_definition": [
+        {
+            "filter_type": "procedure",
+            "level": "stay_level",
+            "include_or_exclude": "include",
+            "max_icu_stays_per_admission": 1,
+            "criteria": [
+                {
+                    "type": "icd9",
+                    "icd9_code_prefixes": ["35", "36", "37", "38", "39"]
+                },
+                {
+                    "type": "cpt",
+                    "cpt_code_ranges": [
+                        {"start": 33016, "end": 37799}
+                    ]
+                }
+            ]
+        }
+    ],
+
+    "output": {
+        "path": "inputs/"
+    }
+}

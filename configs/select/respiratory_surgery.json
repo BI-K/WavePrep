@@ -1,0 +1,49 @@
+{
+    "name": "respiratory_surgery",
+    "description": "Patients with respiratory, mediastinum, or diaphragm surgery (ICD-9 codes 30-34 or CPT codes 30000-32999 / 39000-39599) during ICU stay. Only admissions with a single ICU stay are kept.",
+
+    "database": {
+        "matched_waveform_database": "mimic3wdb-matched/1.0",
+        "signal_duration_index": null,
+        "login": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "mimic_iii",
+            "user": "postgres",
+            "password": null
+        }
+    },
+
+    "record_requirements": {
+        "required_signals": ["CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"],
+        "min_duration_seconds": 3600,
+        "recording_type": "numeric",
+        "precomputed_records_path": null
+    },
+
+    "cohort_definition": [
+        {
+            "filter_type": "procedure",
+            "level": "stay_level",
+            "include_or_exclude": "include",
+            "max_icu_stays_per_admission": 1,
+            "criteria": [
+                {
+                    "type": "icd9",
+                    "icd9_code_prefixes": ["30", "31", "32", "33", "34"]
+                },
+                {
+                    "type": "cpt",
+                    "cpt_code_ranges": [
+                        {"start": 30000, "end": 32999},
+                        {"start": 39000, "end": 39599}
+                    ]
+                }
+            ]
+        }
+    ],
+
+    "output": {
+        "path": "inputs/"
+    }
+}

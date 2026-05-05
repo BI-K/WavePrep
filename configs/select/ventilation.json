@@ -1,0 +1,38 @@
+{
+    "name": "ventilation",
+    "description": "Patients on mechanical ventilation (CPT 94002/94003), output constrained to the verified ventilation time window within each recording. Minimum 65 minutes of overlapping ventilation required.",
+
+    "database": {
+        "matched_waveform_database": "mimic3wdb-matched/1.0",
+        "signal_duration_index": null,
+        "login": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "mimic_iii",
+            "user": "postgres",
+            "password": null
+        }
+    },
+
+    "record_requirements": {
+        "required_signals": ["CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"],
+        "min_duration_seconds": 3600,
+        "recording_type": "numeric",
+        "precomputed_records_path": null
+    },
+
+    "cohort_definition": [
+        {
+            "filter_type": "mechanical_ventilation",
+            "level": "time_span_level",
+            "include_or_exclude": "include",
+            "cpt_codes": ["94002", "94003"],
+            "constrain_to_condition_period": true,
+            "min_condition_duration_seconds": 3900
+        }
+    ],
+
+    "output": {
+        "path": "inputs/"
+    }
+}
