@@ -224,3 +224,6 @@ Splitting takes place by taking the subject IDs from the outputs/create/latest/d
 
 The poster presented at Biosignals Wprkshop 2026 in Innsbruck can be found in the [here](./doc/Workshop_Biosignals_2026_WavePrep_Poster_v1.1.pdf).
 
+## Acknowledgements
+The work was partially funded by the German Research Foundation (DFG) project NFDI4DS (no. 460234259).
+
