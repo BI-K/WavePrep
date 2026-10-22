@@ -78,9 +78,8 @@ Start by specifying the basics
      },
 
     ## Split Specific Configurations ##
+    # WavePrep splits the dataset by subject with group shuffle (see Further notes)
 
-    # the method you want to use to split your dataset - currently only group_shuffle (on subject basis) is supported
-    "splitting_method": "group_shuffle",
     # random seed that will be used for the dataset split
     "random_seed": 42,
 
@@ -98,14 +97,6 @@ Start by specifying the basics
     "output": {
         # the directory the resulting dataset should be saved to
         "base_dir": "outputs/cardiac_surgery",
-        # please do not change this
-        "directory_structure": [
-            "logs",
-            "reports",
-            "data",
-            "analysis",
-            "splits"
-        ],
         # supported formats: csv, edf, matlab, wav, wfdb, mlcroissant
         "save_format": "csv"
     }

@@ -13,6 +13,8 @@ import json
 import os
 from contextlib import contextmanager
 
+from .pipeline_config import OUTPUT_DIRECTORIES
+
 
 class OutputManager:
     """
@@ -67,9 +69,7 @@ class OutputManager:
         # Create main run directory
         run_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create subdirectories from configuration
-        subdirs = self.base_config.get("output", {}).get("directory_structure", [])
-        for subdir in subdirs:
+        for subdir in OUTPUT_DIRECTORIES:
             (run_dir / subdir).mkdir(exist_ok=True)
             
         return run_dir

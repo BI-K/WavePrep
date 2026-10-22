@@ -40,13 +40,12 @@ class ValidationConfig:
 
 SUPPORTED_SAVE_FORMATS = ('csv', 'edf', 'matlab', 'wav', 'wfdb')
 
+OUTPUT_DIRECTORIES = ('logs', 'reports', 'data', 'analysis', 'splits')
+
 
 @dataclass
 class OutputConfig:
     base_dir: str = "outputs"
-    directory_structure: List[str] = field(
-        default_factory=lambda: ['logs', 'reports', 'data', 'splits']
-    )
     include_metadata: bool = False
     save_format: str = 'csv'
     generate_croissant: bool = False
@@ -66,9 +65,6 @@ class OutputConfig:
             )
         return cls(
             base_dir=d.get('base_dir', 'outputs'),
-            directory_structure=d.get(
-                'directory_structure', ['logs', 'reports', 'data', 'splits']
-            ),
             include_metadata=d.get('include_metadata', False),
             save_format=save_format,
             generate_croissant=d.get('generate_croissant', False),
@@ -114,8 +110,6 @@ class SplittingConfig:
     min_samples_per_subject: int = 1
     exclude_subjects: List[str] = field(default_factory=list)
     include_only_subjects: List[str] = field(default_factory=list)
-    splitting_method: str = "group_shuffle"
-    dry_run: bool = False
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> 'SplittingConfig':
@@ -127,8 +121,6 @@ class SplittingConfig:
             min_samples_per_subject=d.get('min_samples_per_subject', 1),
             exclude_subjects=d.get('exclude_subjects', []),
             include_only_subjects=d.get('include_only_subjects', []),
-            splitting_method=d.get('splitting_method', 'group_shuffle'),
-            dry_run=d.get('dry_run', False),
         )
 
 

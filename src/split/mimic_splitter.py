@@ -25,7 +25,7 @@ from .splitter_exceptions import (
     InsufficientDataError, SplitRatioError
 )
 
-from common.pipeline_config import PipelineConfig
+from common.pipeline_config import OUTPUT_DIRECTORIES, PipelineConfig
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -90,31 +90,16 @@ def create_output_directory(config: PipelineConfig, logger) -> Path:
     base_dir = Path(config.output.base_dir)
     output_dir = base_dir
     
-    directories = config.output.directory_structure
-    
-    for dir_name in directories:
+    for dir_name in OUTPUT_DIRECTORIES:
         (output_dir / dir_name).mkdir(parents=True, exist_ok=True)
 
     # make output directory for processing images
     (output_dir / 'reports' / 'process_images').mkdir(parents=True, exist_ok=True)
 
-    
-    # Create split data subdirectories - use the actual directory name from config
-    split_data_dir = None
-    for dir_name in directories:
-        if 'data' in dir_name.lower():  # Find the data directory (could be 'data', 'split_data', etc.)
-            split_data_dir = dir_name
-            break
-    
-    if not split_data_dir:
-        split_data_dir = 'split_data'  # fallback
-        (output_dir / split_data_dir).mkdir(parents=True, exist_ok=True)
-    
     for split_name in ['train', 'validation', 'test']:
-        (output_dir / split_data_dir / split_name).mkdir(parents=True, exist_ok=True)
+        (output_dir / 'data' / split_name).mkdir(parents=True, exist_ok=True)
     
     logger.info(f"Created output directory structure at: {output_dir}")
-    logger.info(f"Using data directory: {split_data_dir}")
     return output_dir
 
 
@@ -353,18 +338,7 @@ def copy_split_data(splits: Dict[str, List[str]], input_path: Path, output_dir: 
     """
     logger.info("Copying data files to split directories...")
     
-    directories = config.output.directory_structure
-    
-    split_data_dir_name = None
-    for dir_name in directories:
-        if 'data' in dir_name.lower():  # Find the data directory
-            split_data_dir_name = dir_name
-            break
-    
-    if not split_data_dir_name:
-        split_data_dir_name = 'split_data'  # fallback
-    
-    split_data_dir = output_dir / split_data_dir_name
+    split_data_dir = output_dir / 'data'
     
     total_files_copied = 0
     
@@ -592,23 +566,18 @@ def split_dataset(config: PipelineConfig, logger, output_dir: Path = None) -> Di
     if output_dir is None:
         output_dir = create_output_directory(config, logger)
     else:
-        directories = config.output.directory_structure
-        
-        for dir_name in directories:
+        for dir_name in OUTPUT_DIRECTORIES:
             (output_dir / dir_name).mkdir(parents=True, exist_ok=True)
 
         (output_dir / 'reports' / 'process_images').mkdir(parents=True, exist_ok=True)
         
-        # Create split data subdirectories
-        split_data_dir_name = next((d for d in directories if 'data' in d.lower()), 'split_data')
         for split_name in ['train', 'validation', 'test']:
-            (output_dir / split_data_dir_name / split_name).mkdir(parents=True, exist_ok=True)
+            (output_dir / 'data' / split_name).mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Using existing output directory: {output_dir}")
     
     # Copy data files to split directories
-    if not config.splitting.dry_run:
-        copy_split_data(splits, input_path, output_dir, config, logger)
+    copy_split_data(splits, input_path, output_dir, config, logger)
     
     # Save split assignments and generate reports
     save_splits(splits, split_samples, output_dir, config, logger)

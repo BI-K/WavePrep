@@ -550,7 +550,7 @@ def _build_description(config: PipelineConfig, stats: Dict[str, Any]) -> str:
         f"patients={len(stats['subject_ids'])}, "
         f"total duration={stats['total_duration_seconds']:.2f}s. "
         f"Splits: {split_summary}. "
-        f"Splitting method: {config.splitting.splitting_method}. "
+        "Splitting method: group_shuffle. "
         f"Windowing: {windowing_summary}. "
         f"Channels included: {channels_summary}. "
         f"Processing summary: {processing_summary}."

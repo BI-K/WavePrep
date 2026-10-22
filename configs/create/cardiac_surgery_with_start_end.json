@@ -1,8 +1,5 @@
 {
-    "run_type": "create", 
     "database_name": "mimic3wdb-matched/1.0",
-    "test_mode": true,
-    "discovery_mode": "record_list",
     "record_list_file": "inputs/cardiac_surgery.csv",
 
     "input_channels": [
@@ -259,7 +256,6 @@
         "strict_nan_check": false
     },
 
-    "splitting_method": "group_shuffle",
     "random_seed": 42,
 
     "train_ratio": 0.8,
@@ -269,17 +265,9 @@
     "min_samples_per_subject": 1,
     "exclude_subjects": [],
     "include_only_subjects": [],
-    "dry_run": false,
 
     "output": {
         "base_dir": "outputs/cardiac_surgery",
-        "directory_structure": [
-            "logs",
-            "reports",
-            "data",
-            "analysis",
-            "splits"
-        ],
         "include_metadata": false
     }
 }
