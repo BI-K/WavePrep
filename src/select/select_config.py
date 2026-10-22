@@ -94,18 +94,17 @@ class FilterElement:
 
     # ── procedure fields ─────────────────────────────────────────────────────
     criteria: Optional[List[ProcedureCriterion]] = None
-    max_icu_stays_per_admission: Optional[int] = None
 
     # ── medication fields ─────────────────────────────────────────────────────
     item_ids_cv: Optional[List[int]] = None
     item_ids_mv: Optional[List[int]] = None
+    min_condition_duration_seconds: Optional[int] = None
 
     # ── ventilation fields ────────────────────────────────────────────────────
     cpt_codes: Optional[List[str]] = None
 
     # ── time-windowing (medication + ventilation) ─────────────────────────────
     constrain_to_condition_period: bool = False
-    min_condition_duration_seconds: Optional[int] = None
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "FilterElement":
@@ -117,12 +116,11 @@ class FilterElement:
             level=d["level"],
             include_or_exclude=d["include_or_exclude"],
             criteria=criteria,
-            max_icu_stays_per_admission=d.get("max_icu_stays_per_admission"),
             item_ids_cv=d.get("item_ids_cv"),
             item_ids_mv=d.get("item_ids_mv"),
+            min_condition_duration_seconds=d.get("min_condition_duration_seconds"),
             cpt_codes=d.get("cpt_codes"),
             constrain_to_condition_period=d.get("constrain_to_condition_period", False),
-            min_condition_duration_seconds=d.get("min_condition_duration_seconds"),
         )
 
 

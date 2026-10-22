@@ -26,7 +26,6 @@
             "filter_type": "procedure",
             "level": "stay_level",
             "include_or_exclude": "exclude",
-            "max_icu_stays_per_admission": null,
             "criteria": [
                 {
                     "type": "icd9",

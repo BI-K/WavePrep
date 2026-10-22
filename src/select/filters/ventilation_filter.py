@@ -86,13 +86,12 @@ def apply_ventilation_filter(
             continue
 
         vent_start, vent_end = vent_window
-        min_dur = filter_elem.min_condition_duration_seconds or 0
 
         windowed = _compute_window(
             vent_start, vent_end,
             rec_start, rec_end,
             duration_s,
-            min_dur,
+            0,
         )
         if windowed is not None:
             out = dict(rec)

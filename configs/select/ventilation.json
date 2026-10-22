@@ -1,6 +1,6 @@
 {
     "name": "ventilation",
-    "description": "Patients on mechanical ventilation (CPT 94002/94003), output constrained to the verified ventilation time window within each recording. Minimum 65 minutes of overlapping ventilation required.",
+    "description": "Patients on mechanical ventilation (CPT 94002/94003), output constrained to the verified ventilation time window within each recording.",
 
     "database": {
         "matched_waveform_database": "mimic3wdb-matched/1.0",
@@ -27,8 +27,7 @@
             "level": "time_span_level",
             "include_or_exclude": "include",
             "cpt_codes": ["94002", "94003"],
-            "constrain_to_condition_period": true,
-            "min_condition_duration_seconds": 3900
+            "constrain_to_condition_period": true
         }
     ],
 

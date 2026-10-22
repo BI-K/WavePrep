@@ -53,10 +53,13 @@ def apply_procedure_filter(
             continue
 
         # ── ICU-stay-count constraint ─────────────────────────────────────────
-        if filter_elem.max_icu_stays_per_admission is not None:
-            stay_count = _get_icu_stay_count(hadm_id, cur)
-            if stay_count > filter_elem.max_icu_stays_per_admission:
-                continue
+        # Procedures are recorded per admission. With more than one ICU stay
+        # we cannot tell which stay followed the procedure.
+        if (
+            filter_elem.include_or_exclude == "include"
+            and _get_icu_stay_count(hadm_id, cur) > 1
+        ):
+            continue
 
         # ── criterion matching (OR logic) ─────────────────────────────────────
         record_matches = _record_matches_any_criterion(
