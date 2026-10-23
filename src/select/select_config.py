@@ -100,9 +100,6 @@ class FilterElement:
     item_ids_mv: Optional[List[int]] = None
     min_condition_duration_seconds: Optional[int] = None
 
-    # ── ventilation fields ────────────────────────────────────────────────────
-    cpt_codes: Optional[List[str]] = None
-
     # ── time-windowing (medication + ventilation) ─────────────────────────────
     constrain_to_condition_period: bool = False
 
@@ -119,7 +116,6 @@ class FilterElement:
             item_ids_cv=d.get("item_ids_cv"),
             item_ids_mv=d.get("item_ids_mv"),
             min_condition_duration_seconds=d.get("min_condition_duration_seconds"),
-            cpt_codes=d.get("cpt_codes"),
             constrain_to_condition_period=d.get("constrain_to_condition_period", False),
         )
 

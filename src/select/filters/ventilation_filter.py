@@ -14,6 +14,9 @@ from .medication_filter import _compute_window
 
 logger = logging.getLogger(__name__)
 
+# CPT 94002 = ventilation start, 94003 = ventilation continuation
+_VENTILATION_CPT_CODES = ["94002", "94003"]
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Public entry point
@@ -26,7 +29,6 @@ def apply_ventilation_filter(
 ) -> List[Dict[str, Any]]:
     """Filter *records* by mechanical ventilation (CPT 94002/94003)."""
     output: List[Dict[str, Any]] = []
-    cpt_codes: List[str] = filter_elem.cpt_codes or ["94002", "94003"]
 
     for rec in records:
         record_id: str = rec.get("record_id") or rec.get("record", "")
@@ -53,7 +55,7 @@ def apply_ventilation_filter(
 
         # ── exclude mode ──────────────────────────────────────────────────────
         if filter_elem.include_or_exclude == "exclude":
-            has_vent = _has_ventilation(subject_id, hadm_id, cpt_codes, cur)
+            has_vent = _has_ventilation(subject_id, hadm_id, cur)
             if not has_vent:
                 out = dict(rec)
                 out["offset_start_seconds"] = 0.0
@@ -63,7 +65,7 @@ def apply_ventilation_filter(
 
         # ── include + no time windowing ───────────────────────────────────────
         if not filter_elem.constrain_to_condition_period:
-            has_vent = _has_ventilation(subject_id, hadm_id, cpt_codes, cur)
+            has_vent = _has_ventilation(subject_id, hadm_id, cur)
             if has_vent:
                 out = dict(rec)
                 out["offset_start_seconds"] = 0.0
@@ -109,14 +111,13 @@ def apply_ventilation_filter(
 def _has_ventilation(
     subject_id: int,
     hadm_id: int,
-    cpt_codes: List[str],
     cur: Any,
 ) -> bool:
-    """True if any of the given CPT codes appear for this admission."""
+    """True if any ventilation CPT code appears for this admission."""
     cur.execute(
         "SELECT 1 FROM mimiciii.cptevents "
         "WHERE subject_id = %s AND hadm_id = %s AND cpt_cd = ANY(%s) LIMIT 1",
-        (subject_id, hadm_id, cpt_codes),
+        (subject_id, hadm_id, _VENTILATION_CPT_CODES),
     )
     return cur.fetchone() is not None
 

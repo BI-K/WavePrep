@@ -26,7 +26,6 @@
             "filter_type": "mechanical_ventilation",
             "level": "time_span_level",
             "include_or_exclude": "exclude",
-            "cpt_codes": ["94002", "94003"],
             "constrain_to_condition_period": false
         }
     ],
