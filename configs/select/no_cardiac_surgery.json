@@ -29,11 +29,11 @@
             "criteria": [
                 {
                     "type": "icd9",
-                    "icd9_code_prefixes": ["35", "36", "37", "38", "39"]
+                    "code_ranges": [{ "start": 3500, "end": 3999 }]
                 },
                 {
                     "type": "cpt",
-                    "cpt_code_ranges": [
+                    "code_ranges": [
                         {"start": 33016, "end": 37799}
                     ]
                 }

@@ -62,18 +62,11 @@ class ProcedureCriterion:
     """A single procedure criterion — either ICD-9 or CPT."""
 
     type: str  # "icd9" or "cpt"
-    icd9_code_prefixes: Optional[List[str]] = None
-    cpt_code_ranges: Optional[List[Dict[str, int]]] = None  # [{"start": int, "end": int}]
-    cpt_codes: Optional[List[str]] = None  # exact CPT code strings
+    code_ranges: List[Dict[str, int]]  # [{"start": int, "end": int}], inclusive
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "ProcedureCriterion":
-        return cls(
-            type=d["type"],
-            icd9_code_prefixes=d.get("icd9_code_prefixes"),
-            cpt_code_ranges=d.get("cpt_code_ranges"),
-            cpt_codes=d.get("cpt_codes"),
-        )
+        return cls(type=d["type"], code_ranges=d["code_ranges"])
 
 
 @dataclass

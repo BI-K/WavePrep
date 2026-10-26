@@ -131,26 +131,47 @@ def _record_matches_any_criterion(
     cur: Any,
 ) -> bool:
     """Return True if the record satisfies at least one criterion (OR logic)."""
-    from ..select_config import ProcedureCriterion  # local import avoids circular
-
     for criterion in criteria:
         if criterion.type == "icd9":
-            if _matches_icd9(
-                subject_id, hadm_id, criterion.icd9_code_prefixes or [], cur
-            ):
+            prefixes = _code_ranges_to_prefixes(criterion.code_ranges)
+            if _matches_icd9(subject_id, hadm_id, prefixes, cur):
                 return True
 
         elif criterion.type == "cpt":
-            if _matches_cpt(
-                subject_id,
-                hadm_id,
-                criterion.cpt_code_ranges,
-                criterion.cpt_codes,
-                cur,
-            ):
+            if _matches_cpt(subject_id, hadm_id, criterion.code_ranges, cur):
                 return True
 
     return False
+
+
+def _code_ranges_to_prefixes(code_ranges: List[Dict[str, int]]) -> List[str]:
+    """
+    Convert inclusive numeric ranges into ICD-9 code prefixes.
+
+    Each range is read as leading digits of a code, with start zero-padded to
+    the width of end, so {"start": 3500, "end": 3999} becomes
+    ["35", "36", "37", "38", "39"].
+    """
+    prefixes: List[str] = []
+    for rng in code_ranges:
+        width = len(str(rng["end"]))
+        prefixes.extend(_prefix_cover(rng["start"], rng["end"], width))
+    return prefixes
+
+
+def _prefix_cover(start: int, end: int, width: int) -> List[str]:
+    """Prefixes whose width-digit expansions are exactly the numbers start..end."""
+    if start == 0 and end == 10 ** width - 1:
+        return [""]
+    block = 10 ** (width - 1)
+    first, last = start // block, end // block
+    if first == last:
+        return [str(first) + p for p in _prefix_cover(start % block, end % block, width - 1)]
+    return (
+        [str(first) + p for p in _prefix_cover(start % block, block - 1, width - 1)]
+        + [str(d) for d in range(first + 1, last)]
+        + [str(last) + p for p in _prefix_cover(0, end % block, width - 1)]
+    )
 
 
 def _matches_icd9(
@@ -174,23 +195,17 @@ def _matches_icd9(
 def _matches_cpt(
     subject_id: int,
     hadm_id: int,
-    code_ranges: Optional[List[Dict[str, int]]],
-    cpt_codes: Optional[List[str]],
+    code_ranges: List[Dict[str, int]],
     cur: Any,
 ) -> bool:
-    """True if any CPT event for the stay falls in a range or matches an exact code."""
+    """True if any CPT event for the stay falls in a range."""
     cur.execute(
-        "SELECT cpt_number, cpt_cd FROM mimiciii.cptevents "
+        "SELECT cpt_number FROM mimiciii.cptevents "
         "WHERE subject_id = %s AND hadm_id = %s",
         (subject_id, hadm_id),
     )
-    rows = cur.fetchall()
-    for cpt_number, cpt_cd in rows:
-        # exact code string match (e.g. "94002")
-        if cpt_codes and cpt_cd in cpt_codes:
-            return True
-        # numeric range match (e.g. 33016–37799)
-        if code_ranges and cpt_number is not None:
+    for (cpt_number,) in cur.fetchall():
+        if cpt_number is not None:
             for rng in code_ranges:
                 if rng["start"] <= int(cpt_number) <= rng["end"]:
                     return True
