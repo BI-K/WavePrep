@@ -35,6 +35,148 @@ The ```record``` column should contain the record names. The ```offset_start_sec
 (record_start_time + offest_start_seconds) to (record_start_time + offset_end_seconds)
 ```
 
+You can write this file by hand, or let the select module build it for you (see 1.1).
+
+
+### 1.1) Select records with the select module
+
+The select module finds the records of a patient cohort, for example all patients with cardiac surgery, and writes the CSV from step 1. It reads the clinical data from a MIMIC-III PostgreSQL database, so you need a running database with MIMIC-III loaded into the ```mimiciii``` schema.
+
+Run it with:
+```bash
+python scripts/select_records.py --config configs/select/cardiac_surgery.json
+```
+
+Add ```--log-level DEBUG``` to see why single records are skipped. The script writes the CSV to ```{output.path}/{name}.csv```, here ```inputs/cardiac_surgery.csv```. Set ```record_list_file``` in your create config to this file.
+
+The selection runs in four steps:
+1. Find candidate records that contain all required signals and are long enough.
+2. Apply each filter in ```cohort_definition``` in order. A record has to pass every filter.
+3. Look up the recording duration of records that do not have one yet.
+4. Write the CSV.
+
+The folder ```configs/select/``` has a ready-made config for each of these cohorts: cardiac surgery, respiratory surgery, vasopressors, ventilation, and the matching ```no_*``` control groups.
+
+#### 1.1.1) Configure the selection
+
+The selection is configured in a ```config.json``` as well. Let's walk through it:
+```
+{
+    # the name of the cohort, also used as the name of the output CSV
+    "name": "cardiac_surgery",
+    # free text for humans, the script does not read it
+    "description": "Patients with cardiac surgery (ICD-9 codes 35-39 or CPT codes 33016-37799) during their ICU stay.",
+
+    "database": {
+        # the waveform database the records come from, for now only mimic3wdb-matched/1.0 is supported
+        "matched_waveform_database": "mimic3wdb-matched/1.0",
+        # optional CSV with one row per record and signal (columns: subject, record_id, signal, duration_seconds)
+        # it makes finding candidates and looking up durations much faster than reading headers from PhysioNet
+        "signal_duration_index": "inputs/mimic3wdb-matched_numerics_signals_duration.csv",
+        # connection to your MIMIC-III PostgreSQL database
+        # with "password": null the password is read from PGPASSWORD or ~/.pgpass
+        "login": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "mimic_iii",
+            "user": "postgres",
+            "password": null
+        }
+    },
+
+    "record_requirements": {
+        # a candidate record has to contain all of these signals
+        "required_signals": ["CVP", "HR", "ABPSys", "ABPDias", "ABPMean", "SpO2"],
+        # a candidate record has to be longer than this
+        "min_duration_seconds": 3600,
+        # "numeric", "non-numeric" or "both"
+        "recording_type": "numeric",
+        # optional JSON list of records you already checked, e.g. [{"subject": "p00/p000020/", "record_id": "p000020-2183-04-28-17-47n"}]
+        # if set, the signal and duration checks above are skipped
+        "precomputed_records_path": "inputs/valid_records_hinrichs_base_model_abp.json"
+    },
+
+    # the filters that define your cohort, please see next section for details
+    "cohort_definition": [ ... ],
+
+    "output": {
+        # the folder the CSV is written to
+        "path": "inputs/"
+    }
+}
+```
+
+The candidates come from ```precomputed_records_path``` if it is set, otherwise from ```signal_duration_index```. If you set neither, the script reads every record header from PhysioNet, which can take many hours.
+
+#### 1.1.2) Filters
+
+Each filter in ```cohort_definition``` has a ```filter_type```, a ```level``` and ```include_or_exclude```. With ```"include"``` the filter keeps the records that match, with ```"exclude"``` it keeps the records that do not match. The ```level``` only labels the filter. Use ```stay_level``` for ```procedure``` and ```time_span_level``` for the other two.
+
+Every filter first links the record to a hospital admission through the ICU stay that contains the start of the recording (with 2 hours of tolerance). Records without such an ICU stay are dropped.
+
+Currently the filter types ```procedure```, ```medication``` and ```mechanical_ventilation``` are supported.
+
+```procedure```:
+```
+{
+    "filter_type": "procedure",
+    "level": "stay_level",
+    "include_or_exclude": "include",
+    # a record matches if any of the criteria matches
+    "criteria": [
+        {
+            # ICD-9 procedure codes, written without the dot, so 3500 to 3999 means 35.00 to 39.99
+            "type": "icd9",
+            "code_ranges": [{ "start": 3500, "end": 3999 }]
+        },
+        {
+            # CPT codes
+            "type": "cpt",
+            "code_ranges": [
+                {"start": 33016, "end": 37799}
+            ]
+        }
+    ]
+}
+```
+
+Both ends of a range are included. CPT codes are compared as numbers. ICD-9 codes are compared on their leading digits. WavePrep pads ```start``` with zeros to the number of digits of ```end``` and turns the range into code prefixes, so ```3500``` to ```3999``` becomes ```35```, ```36```, ```37```, ```38``` and ```39```.
+
+With ```"include"``` only admissions with a single ICU stay are kept. A procedure is recorded per admission, so if there are several ICU stays we cannot know which one followed the procedure. The whole recording ends up in the CSV.
+
+```medication```:
+```
+{
+    "filter_type": "medication",
+    "level": "time_span_level",
+    "include_or_exclude": "include",
+    # MIMIC-III item ids of the medications, from inputevents_cv (CareVue) and inputevents_mv (MetaVision)
+    "item_ids_cv": [30042, 30043, 30044, 30047, 30051, 30119, 30120, 30127, 30128],
+    "item_ids_mv": [221906, 221289, 221662, 222315, 221749, 221653],
+    # true: keep only the part of the recording during which the medication was given
+    # false: keep the whole recording
+    "constrain_to_condition_period": true,
+    # with constrain_to_condition_period, parts shorter than this are dropped
+    "min_condition_duration_seconds": 3900
+}
+```
+
+With ```constrain_to_condition_period``` one recording can end up in the CSV several times, once for each medication interval. With ```"exclude"``` the whole recording is always used.
+
+```mechanical_ventilation```:
+```
+{
+    "filter_type": "mechanical_ventilation",
+    "level": "time_span_level",
+    "include_or_exclude": "include",
+    # true: keep only the part of the recording during which the patient was ventilated
+    # false: keep the whole recording
+    "constrain_to_condition_period": true
+}
+```
+
+Ventilation is found through the CPT codes 94002 and 94003, so the filter needs no codes in the config. MIMIC-III stores only the date of these codes, so with ```constrain_to_condition_period``` the ventilation period runs from midnight of the first day with code 94003 to midnight of the last such day. Admissions with code 94003 on a single day only are dropped.
+
 
 ## 2) Configure the Dataset Creation
 
