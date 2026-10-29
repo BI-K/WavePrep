@@ -110,7 +110,7 @@ The candidates come from ```precomputed_records_path``` if it is set, otherwise 
 
 #### 1.1.2) Filters
 
-Each filter in ```cohort_definition``` has a ```filter_type```, a ```level``` and ```include_or_exclude```. With ```"include"``` the filter keeps the records that match, with ```"exclude"``` it keeps the records that do not match. The ```level``` only labels the filter. Use ```stay_level``` for ```procedure``` and ```time_span_level``` for the other two.
+Each filter in ```cohort_definition``` has a ```filter_type``` and ```include_or_exclude```. With ```"include"``` the filter keeps the records that match, with ```"exclude"``` it keeps the records that do not match.
 
 Every filter first links the record to a hospital admission through the ICU stay that contains the start of the recording (with 2 hours of tolerance). Records without such an ICU stay are dropped.
 
@@ -120,7 +120,6 @@ Currently the filter types ```procedure```, ```medication``` and ```mechanical_v
 ```
 {
     "filter_type": "procedure",
-    "level": "stay_level",
     "include_or_exclude": "include",
     # a record matches if any of the criteria matches
     "criteria": [
@@ -148,7 +147,6 @@ With ```"include"``` only admissions with a single ICU stay are kept. A procedur
 ```
 {
     "filter_type": "medication",
-    "level": "time_span_level",
     "include_or_exclude": "include",
     # MIMIC-III item ids of the medications, from inputevents_cv (CareVue) and inputevents_mv (MetaVision)
     "item_ids_cv": [30042, 30043, 30044, 30047, 30051, 30119, 30120, 30127, 30128],
@@ -167,7 +165,6 @@ With ```constrain_to_condition_period``` one recording can end up in the CSV sev
 ```
 {
     "filter_type": "mechanical_ventilation",
-    "level": "time_span_level",
     "include_or_exclude": "include",
     # true: keep only the part of the recording during which the patient was ventilated
     # false: keep the whole recording

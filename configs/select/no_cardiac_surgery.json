@@ -24,7 +24,6 @@
     "cohort_definition": [
         {
             "filter_type": "procedure",
-            "level": "stay_level",
             "include_or_exclude": "exclude",
             "criteria": [
                 {

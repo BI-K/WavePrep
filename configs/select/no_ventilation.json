@@ -24,7 +24,6 @@
     "cohort_definition": [
         {
             "filter_type": "mechanical_ventilation",
-            "level": "time_span_level",
             "include_or_exclude": "exclude",
             "constrain_to_condition_period": false
         }

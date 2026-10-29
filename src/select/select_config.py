@@ -76,13 +76,12 @@ class FilterElement:
     within a "procedure" element are OR-combined (union).
 
     filter_type values:
-        "procedure"              — stay_level:      ICD-9 / CPT code checks
-        "medication"             — time_span_level: inputevents_cv + inputevents_mv
-        "mechanical_ventilation" — time_span_level: CPT 94002 / 94003
+        "procedure"              — ICD-9 / CPT code checks
+        "medication"             — inputevents_cv + inputevents_mv
+        "mechanical_ventilation" — CPT 94002 / 94003
     """
 
     filter_type: str
-    level: str
     include_or_exclude: str  # "include" or "exclude"
 
     # ── procedure fields ─────────────────────────────────────────────────────
@@ -103,7 +102,6 @@ class FilterElement:
             criteria = [ProcedureCriterion.from_dict(c) for c in d["criteria"]]
         return cls(
             filter_type=d["filter_type"],
-            level=d["level"],
             include_or_exclude=d["include_or_exclude"],
             criteria=criteria,
             item_ids_cv=d.get("item_ids_cv"),

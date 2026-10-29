@@ -24,7 +24,6 @@
     "cohort_definition": [
         {
             "filter_type": "medication",
-            "level": "time_span_level",
             "include_or_exclude": "exclude",
             "item_ids_cv": [30042, 30043, 30044, 30047, 30051, 30119, 30120, 30127, 30128],
             "item_ids_mv": [221906, 221289, 221662, 222315, 221749, 221653],

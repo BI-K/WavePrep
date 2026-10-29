@@ -1,5 +1,5 @@
 """
-Mechanical-ventilation cohort filter (time_span_level).
+Mechanical-ventilation cohort filter.
 """
 
 from __future__ import annotations

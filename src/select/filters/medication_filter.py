@@ -1,5 +1,5 @@
 """
-Medication-based cohort filter (time_span_level).
+Medication-based cohort filter.
 """
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 """
-Procedure-based cohort filter (stay_level).
+Procedure-based cohort filter.
 """
 
 from __future__ import annotations
